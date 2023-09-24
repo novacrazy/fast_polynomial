@@ -1,20 +1,32 @@
 [package]
 name = "fast_polynomial"
 version = "0.1.0"
+authors = ["novacrazy <novacrazy@gmail.com>"]
 edition = "2021"
+license = "MIT"
+keywords = ["polynomial", "horner", "estrin"]
+categories = ["algorithms", "no-std"]
+description = "Faster polynomial evaluation using Estrin's Scheme to exploit instruction-level parallelism"
+include = ["src/**/*", "LICENSE", "README.md"]
+readme = "README.md"
+documentation = "https://docs.rs/fast_polynomial"
+repository = "https://github.com/novacrazy/fast_polynomial"
 
 [features]
-default = ["fma"]
+default = ["fma", "std"]
 fma = []
+std = ["num-traits/std"]
+libm = ["num-traits/libm"]
 
 [dependencies]
-num-traits = "0.2"
+num-traits = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
 name = "main"
+path = "benches/main.rs"
 harness = false
 
 [profile.release]

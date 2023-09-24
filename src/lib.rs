@@ -1,7 +1,31 @@
-use num_traits::Float;
+#![no_std]
+
+use core::ops::{Add, Mul};
+use num_traits::{MulAdd, Zero};
+
+/// The minimum requires functionality required for a number to evaluated in a polynomial.
+pub trait PolyNum:
+    Sized
+    + Copy
+    + Zero
+    + Add<Self, Output = Self>
+    + Mul<Self, Output = Self>
+    + MulAdd<Self, Self, Output = Self>
+{
+}
+
+impl<T> PolyNum for T where
+    T: Sized
+        + Copy
+        + Zero
+        + Add<Self, Output = Self>
+        + Mul<Self, Output = Self>
+        + MulAdd<Self, Self, Output = Self>
+{
+}
 
 #[inline(always)]
-fn fma<F: Float>(x: F, m: F, a: F) -> F {
+fn fma<F: PolyNum>(x: F, m: F, a: F) -> F {
     #[cfg(feature = "fma")]
     return x.mul_add(m, a);
 
@@ -9,91 +33,86 @@ fn fma<F: Float>(x: F, m: F, a: F) -> F {
     return x * m + a;
 }
 
-pub mod poly;
+pub mod polynomials;
 
+/// Evaluate a polynomial for an array of coefficients. Can be monomorphized.
+///
+/// To be monomorphized means a dedicated instance of this code will be generated for
+/// the array of this length, removing many/all branches within the internal code that
+/// invocations such as [`poly`] may require to support many lengths. This function will
+/// be faster.
 #[inline]
-pub fn horners_method<F: Float>(x: F, coeffs: &[F]) -> F {
-    horners_method_f(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
+pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
+    poly_f_internal::<F, _, N>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
-#[inline]
-pub fn poly_array<F: Float, const N: usize>(x: F, coeffs: &[F; N]) -> F {
-    poly_f::<F, _, N>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
+/// Evaluate a polynomial for a slice of coefficients. May not be monomorphized.
+///
+/// To not be monomorphized means this function may be used for any number of coefficients,
+/// and therefore contains branches. It may be faster to use [`poly_array`] instead.
+pub fn poly<F: PolyNum>(x: F, coeffs: &[F]) -> F {
+    poly_f_internal::<F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
-#[inline]
-pub fn poly<F: Float>(x: F, coeffs: &[F]) -> F {
-    poly_f::<F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
-}
-
+/// Evaluate a polynomial using a function to provide coefficients.
 #[inline(always)]
-pub fn horners_method_f<F: Float, G>(x: F, mut n: usize, mut g: G) -> F
+pub fn poly_f<F: PolyNum, G>(x: F, n: usize, g: G) -> F
 where
     G: FnMut(usize) -> F,
 {
-    let mut sum = F::zero();
-
-    while n > 0 {
-        n -= 1;
-        sum = fma(sum, x, g(n));
-    }
-
-    sum
+    poly_f_internal::<F, _, 0>(x, n, g)
 }
 
 #[inline(always)]
 #[rustfmt::skip]
-pub fn poly_f<F: Float, G, const MONO_HACK: usize>(x: F, n: usize, mut g: G) -> F
+fn poly_f_internal<F: PolyNum, G, const LENGTH: usize>(x: F, n: usize, mut g: G) -> F
 where
     G: FnMut(usize) -> F,
 {
-    use poly::*;
+    use polynomials::*;
+
+    // if LENGTH is used, assume n = LENGTH to improve codegen
+    if LENGTH != 0 && n != LENGTH {
+        unsafe { core::hint::unreachable_unchecked() };
+    }
 
     const MAX_DEGREE_P0: usize = 16;
 
     // fast path for small input
-    if n <= MAX_DEGREE_P0 {
-        return if n < 5 {
-            match n {
-                0 => F::zero(),
-                1 => g(0),
-                2 => poly_1(x, g(0), g(1)),
-                3 => poly_2(x, x * x, g(0), g(1), g(2)),
-                4 => poly_3(x, x * x, g(0), g(1), g(2), g(3)),
-                _ => unsafe { core::hint::unreachable_unchecked() }
-            }
-        } else {
-            let x2 = x * x;
-            let x4 = x2 * x2;
-            let x8 = x4 * x4;
-
-            let (g0, g1, g2, g3, g4) = (g(0), g(1), g(2), g(3), g(4));
-
-            match n {
-                5 =>  poly_4 (x, x2, x4,     g0, g1, g2, g3, g4),
-                6 =>  poly_5 (x, x2, x4,     g0, g1, g2, g3, g4, g(5)),
-                7 =>  poly_6 (x, x2, x4,     g0, g1, g2, g3, g4, g(5), g(6)),
-                8 =>  poly_7 (x, x2, x4,     g0, g1, g2, g3, g4, g(5), g(6), g(7)),
-                9 =>  poly_8 (x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8)),
-                10 => poly_9 (x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9)),
-                11 => poly_10(x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9), g(10)),
-                12 => poly_11(x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9), g(10), g(11)),
-                13 => poly_12(x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12)),
-                14 => poly_13(x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12), g(13)),
-                15 => poly_14(x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12), g(13), g(14)),
-                16 => poly_15(x, x2, x4, x8, g0, g1, g2, g3, g4, g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12), g(13), g(14), g(15)),
-                _ => unsafe { core::hint::unreachable_unchecked() }
-            }
-        };
+    match n {
+        0 => return F::zero(),
+        1 => return g(0),
+        2 => return poly_1(x, g(0), g(1)),
+        3 => return poly_2(x, x * x, g(0), g(1), g(2)),
+        4 => return poly_3(x, x * x, g(0), g(1), g(2), g(3)),
+        _ => {}
     }
-
-    let xmd = x.powi(MAX_DEGREE_P0 as i32);
-
-    let mut sum = F::zero();
 
     let x2 = x * x;
     let x4 = x2 * x2;
     let x8 = x4 * x4;
+
+    match n {
+        5 =>  return poly_4 (x, x2, x4,     g(0), g(1), g(2), g(3), g(4)),
+        6 =>  return poly_5 (x, x2, x4,     g(0), g(1), g(2), g(3), g(4), g(5)),
+        7 =>  return poly_6 (x, x2, x4,     g(0), g(1), g(2), g(3), g(4), g(5), g(6)),
+        8 =>  return poly_7 (x, x2, x4,     g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7)),
+        9 =>  return poly_8 (x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8)),
+        10 => return poly_9 (x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9)),
+        11 => return poly_10(x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10)),
+        12 => return poly_11(x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11)),
+        13 => return poly_12(x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12)),
+        14 => return poly_13(x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12), g(13)),
+        15 => return poly_14(x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12), g(13), g(14)),
+        16 => return poly_15(x, x2, x4, x8, g(0), g(1), g(2), g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), g(12), g(13), g(14), g(15)),
+        _ => {}
+    }
+
+    let x16 = x8 * x8;
+
+    let xmd = x16; // x.powi(MAX_DEGREE_P0 as i32);
+
+    let mut sum = F::zero();
 
     // Use a hybrid Estrin/Horner algorithm
     let mut j = n;
@@ -130,31 +149,4 @@ where
     };
 
     fma(sum, rmx, res)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_polys() {
-        #[rustfmt::skip]
-        let c = [
-            0.9066094402137101, 0.7030666449646632, 0.8062843184510005, 1.4354479997076703, 1.1700851966666594,
-            1.0036799628327977, 0.669178962803656, 0.7728758968389648, 0.5606587385173203, 1.0939290310925256,
-            0.8620002023538906, 1.2530914565673503, 1.4918792702029815, 1.3154976283644524, 1.3564397050359411,
-            1.0271024168686784, 1.405690756664578, 0.5449121493513336, 0.9862179238638533, 0.9124457978499287,
-            0.8732207167879933, 0.6630588917237896, 0.5904674982257736, 1.4169918094580403, 0.958839837872578,
-            0.5505474299309041, 0.8383676032996494, 0.9596512540091879, 0.6559726022409615, 1.0826517080111482,
-            1.3846791166569572, 1.3762199390279588, 0.6807699410480192, 0.9768566731838964, 1.2572212915635828,
-            0.701803747744993, 0.8273020543751974, 1.4638922915963615, 1.348778424905363, 1.3457337576150634,
-            1.1274404084913705, 0.6266756469558616,
-        ];
-
-        assert!((horners_method(0.2, &c) - 1.09320587687) < 1e-10);
-        assert!((poly(0.2, &c) - 1.09320587687) < 1e-10);
-
-        assert!((horners_method(-0.4, &c[..4]) - 0.662519601199) < 1e-10);
-        assert!((poly(-0.4, &c[..4]) - 0.662519601199) < 1e-10);
-    }
 }

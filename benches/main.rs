@@ -1,5 +1,26 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
+use num_traits::Float;
+
+#[inline(always)]
+pub fn horners_method_f<F: Float, G>(x: F, mut n: usize, mut g: G) -> F
+where
+    G: FnMut(usize) -> F,
+{
+    let mut sum = F::zero();
+
+    while n > 0 {
+        n -= 1;
+        sum = sum.mul_add(x, g(n));
+    }
+
+    sum
+}
+
+pub fn horners_method<F: Float>(x: F, coeffs: &[F]) -> F {
+    horners_method_f(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     #[rustfmt::skip]
     let coeffs = black_box([
@@ -176,7 +197,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         g.bench_function(format!("{:04}: Horner's Method", coeffs.len()), |b| {
             b.iter(|| {
                 for _ in 0..100 {
-                    black_box(fast_polynomial::horners_method(x, coeffs));
+                    black_box(horners_method(x, coeffs));
                 }
             });
         });
