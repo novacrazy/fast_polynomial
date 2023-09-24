@@ -1,0 +1,28 @@
+[package]
+name = "fast_polynomial"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["fma"]
+fma = []
+
+[dependencies]
+num-traits = "0.2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "main"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = 'fat'
+codegen-units = 1
+
+[profile.bench]
+opt-level = 3
+lto = 'fat'
+codegen-units = 1
