@@ -1,24 +1,18 @@
 use fast_polynomial::poly;
-use num_traits::Float;
 
-#[inline(always)]
-pub fn horners_method_f<F: Float, G>(x: F, mut n: usize, mut g: G) -> F
-where
-    G: FnMut(usize) -> F,
-{
-    let mut sum = F::zero();
-
-    while n > 0 {
-        n -= 1;
-        sum = sum.mul_add(x, g(n));
+// version from readme
+fn horners_method(x: f64, coefficients: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for coeff in coefficients.iter().rev().copied() {
+        sum = x * sum + coeff;
     }
-
     sum
 }
 
-#[inline]
-pub fn horners_method<F: Float>(x: F, coeffs: &[F]) -> F {
-    horners_method_f(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
+macro_rules! assert_feq {
+    ($e:expr, $a:expr, $b:expr) => {
+        assert!(($a - $b).abs() < $e);
+    };
 }
 
 #[test]
@@ -36,9 +30,18 @@ fn test_polys() {
         1.1274404084913705, 0.6266756469558616,
     ];
 
-    assert!((horners_method(0.2, &c) - 1.09320587687) < 1e-10);
-    assert!((poly(0.2, &c) - 1.09320587687) < 1e-10);
+    assert_feq!(1e-10, 1.09320587687, horners_method(0.2, &c));
+    assert_feq!(1e-10, 1.09320587687, poly(0.2, &c));
 
-    assert!((horners_method(-0.4, &c[..4]) - 0.662519601199) < 1e-10);
-    assert!((poly(-0.4, &c[..4]) - 0.662519601199) < 1e-10);
+    assert_feq!(1e-10, 1.76658610593, horners_method(0.5, &c));
+    assert_feq!(1e-10, 1.76658610593, poly(0.5, &c));
+
+    assert_feq!(1e-10, 0.662519601199, horners_method(-0.4, &c[..4]));
+    assert_feq!(1e-10, 0.662519601199, poly(-0.4, &c[..4]));
+
+    for x in [-0.5, 0.1, 0.5, 0.9, 1.1] {
+        for i in 0..=c.len() {
+            assert_feq!(1e-10, horners_method(x, &c[..i]), poly(x, &c[..i]));
+        }
+    }
 }
