@@ -65,6 +65,9 @@
 //! Using [`poly_array`] can be significantly more performant for fixed-degree polynomials. In optimized builds,
 //! the monomorphized codegen will be nearly ideal and avoid unecessary branching.
 //!
+//! However, should you need to evaluate multiple polynomials with the same X value, the [`polynomials`] module
+//! exists to provide direct fixed-degree functions that allow the reuse of powers of X up to degree-15.
+//!
 //! ## Cargo Features
 //! By default, the `fma` crate feature is enabled, which uses the [`mul_add`](MulAdd) function from [`num-traits`](num_traits) to improve
 //! both performance and accuracy. However, when a dedicated FMA (Fused Multiply-Add) instruction is not available,
