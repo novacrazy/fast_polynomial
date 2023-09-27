@@ -73,10 +73,12 @@ exists to provide direct fixed-degree functions that allow the reuse of powers o
 
 ## Cargo Features
 
-By default, the `fma` crate feature is enabled, which uses the `mul_add` function from `num-traits` to improve
-both performance and accuracy. However, when a dedicated FMA (Fused Multiply-Add) instruction is not available,
-Rust will substitute it with a function call that emulates it, decreasing performance. Set `default-features = false`
-to fallback to split multiply and addition operations. If a reliable method of autodetecting this at compile time
-is found, I will update the crate to do that instead, but `#[cfg(target_feature = "fma")]` does not work correctly.
-
 The `std` (default) and `libm` crate features are passed through to `num-traits`.
+
+##### `no_fma`
+
+By default, this crate will use Fused Multiply-Addition (FMA) operations to improve performance and accuracy.
+It does this by calling `MulAdd::mul_add` from `num-traits`. However, if your compile target doesn't support
+native FMA instructions this may generate function calls to emulate FMA, which will keep the accuracy but be
+much slower than a seperate multiplication and addition. You may pass the `no_fma` crate feature to disable
+FMA and fallback to seperate operations. Future work may be done to better determine this automatically.

@@ -13,8 +13,8 @@ documentation = "https://docs.rs/fast_polynomial"
 repository = "https://github.com/novacrazy/fast_polynomial"
 
 [features]
-default = ["fma", "std"]
-fma = []
+default = ["std"]
+no_fma = []
 std = ["num-traits/std"]
 libm = ["num-traits/libm"]
 
