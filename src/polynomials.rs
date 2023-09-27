@@ -190,7 +190,7 @@ pub fn poly_15<F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_30<F: PolyNum>(
+pub fn poly_31<F: PolyNum>(
     x: F, x2: F, x4: F, x8: F, x16: F,
     c00: F, c01: F, c02: F, c03: F, c04: F, c05: F, c06: F, c07: F, c08: F, c09: F, c10: F, c11: F, c12: F, c13: F, c14: F, c15: F,
     c16: F, c17: F, c18: F, c19: F, c20: F, c21: F, c22: F, c23: F, c24: F, c25: F, c26: F, c27: F, c28: F, c29: F, c30: F, c31: F
