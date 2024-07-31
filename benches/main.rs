@@ -174,6 +174,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         16,
         18,
         29,
+        31,
         64,
         84,
         128,

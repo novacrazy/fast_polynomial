@@ -1,4 +1,4 @@
-use fast_polynomial::poly;
+use fast_polynomial::{poly, rational};
 
 // version from readme
 fn horners_method(x: f64, coefficients: &[f64]) -> f64 {
@@ -42,6 +42,17 @@ fn test_polys() {
     for x in [-0.5, 0.1, 0.5, 0.9, 1.1] {
         for i in 0..=c.len() {
             assert_feq!(1e-10, horners_method(x, &c[..i]), poly(x, &c[..i]));
+
+            if i < (c.len() - 11) {
+                let numerator = &c[i..i + 10];
+                let denominator = &c[(i + 1)..(i + 11)];
+
+                assert_feq!(
+                    1e-10,
+                    horners_method(x, numerator) / horners_method(x, denominator),
+                    rational(x, numerator, denominator)
+                );
+            }
         }
     }
 }
