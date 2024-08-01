@@ -196,6 +196,10 @@ where
 }
 
 /// Variation of [`rational_f`] that is monomorphized for a specific number of coefficients.
+///
+/// # Panics
+///
+/// Panics if `L` is 0, as this is not a valid polynomial.
 #[inline]
 pub fn rational_f_n<F: PolyRational, N, D, const L: usize>(x: F, numerator: N, denomiator: D) -> F
 where
