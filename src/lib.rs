@@ -82,12 +82,12 @@ pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
 /// other methods such as [`rational`] may require to support many lengths. This function will
 /// be faster, put simply.
 #[inline(always)]
-pub fn rational_array<F: PolyRational, const N: usize>(
+pub fn rational_array<F: PolyRational, const P: usize, const Q: usize>(
     x: F,
-    numerator: &[F; N],
-    denomiator: &[F; N],
+    numerator: &[F; P],
+    denomiator: &[F; Q],
 ) -> F {
-    rational_f_n::<F, _, _, N>(
+    rational_f_n::<F, _, _, P, Q>(
         x,
         |i| unsafe { *numerator.get_unchecked(i) },
         |i| unsafe { *denomiator.get_unchecked(i) },
@@ -105,15 +105,15 @@ where
 
 /// More flexible variant of [`rational_array`]
 #[inline(always)]
-pub fn rational_array_t<F: PolyRational, T, const N: usize>(
+pub fn rational_array_t<F: PolyRational, T, const P: usize, const Q: usize>(
     x: F,
-    numerator: &[T; N],
-    denomiator: &[T; N],
+    numerator: &[T; P],
+    denomiator: &[T; Q],
 ) -> F
 where
     T: Clone + Into<F>,
 {
-    rational_f_n::<F, _, _, N>(
+    rational_f_n::<F, _, _, P, Q>(
         x,
         |i| unsafe { numerator.get_unchecked(i).clone().into() },
         |i| unsafe { denomiator.get_unchecked(i).clone().into() },
@@ -132,20 +132,11 @@ pub fn poly<F: PolyNum>(x: F, coeffs: &[F]) -> F {
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`rational_array`] instead if possible.
-///
-/// # Panics
-///
-/// Panics if the numerator and denominator arrays have different lengths.
 pub fn rational<F: PolyRational>(x: F, numerator: &[F], denominator: &[F]) -> F {
-    assert_eq!(
-        numerator.len(),
-        denominator.len(),
-        "Numerator and Denomiator must have the same number of coefficients"
-    );
-
-    rational_f_internal::<F, _, _, 0>(
+    rational_f_internal::<F, _, _, 0, 0>(
         x,
         numerator.len(),
+        denominator.len(),
         |i| unsafe { *numerator.get_unchecked(i) },
         |i| unsafe { *denominator.get_unchecked(i) },
     )
@@ -178,12 +169,12 @@ where
 /// known at compile-time. However, this function may be slower than [`rational`] due to the
 /// lack of monomorphization optimizations.
 #[inline]
-pub fn rational_f<F: PolyRational, N, D>(x: F, n: usize, numerator: N, denomiator: D) -> F
+pub fn rational_f<F: PolyRational, N, D>(x: F, p: usize, q: usize, numerator: N, denomiator: D) -> F
 where
     N: FnMut(usize) -> F,
     D: FnMut(usize) -> F,
 {
-    rational_f_internal::<F, _, _, 0>(x, n, numerator, denomiator)
+    rational_f_internal::<F, _, _, 0, 0>(x, p, q, numerator, denomiator)
 }
 
 /// Variation of [`poly_f`] that is monomorphized for a specific number of coefficients.
@@ -196,27 +187,24 @@ where
 }
 
 /// Variation of [`rational_f`] that is monomorphized for a specific number of coefficients.
-///
-/// # Panics
-///
-/// Panics if `L` is 0, as this is not a valid polynomial.
 #[inline]
-pub fn rational_f_n<F: PolyRational, N, D, const L: usize>(x: F, numerator: N, denomiator: D) -> F
+pub fn rational_f_n<F: PolyRational, N, D, const P: usize, const Q: usize>(
+    x: F,
+    numerator: N,
+    denomiator: D,
+) -> F
 where
     N: FnMut(usize) -> F,
     D: FnMut(usize) -> F,
 {
-    if L == 0 {
-        panic!("Rational polynomials must have at least one coefficient");
-    }
-
-    rational_f_internal::<F, _, _, L>(x, L, numerator, denomiator)
+    rational_f_internal::<F, _, _, P, Q>(x, P, Q, numerator, denomiator)
 }
 
 #[inline(always)]
-fn rational_f_internal<F: PolyRational, N, D, const LENGTH: usize>(
+fn rational_f_internal<F: PolyRational, N, D, const P: usize, const Q: usize>(
     x: F,
-    n: usize,
+    p: usize,
+    q: usize,
     mut numerator: N,
     mut denominator: D,
 ) -> F
@@ -226,19 +214,37 @@ where
 {
     let one = F::one();
 
+    // static or dynamic degree
+    let high_degree = (P > 2 || Q > 2) || (P == 0 && Q == 0 && (p > 2 || q > 2));
+
     // if the length is greater than 2 (degree >= 2) the multiplication will be performed
     // anyway, and LLVM will reuse this result for the non-inverted polynomial below.
-    let (numerator, denominator) = if LENGTH > 2 && (x * x) > one {
-        let x = one / x;
+    let (numerator, denominator) = if high_degree && (x * x) > one {
+        let ix = one / x;
 
-        (
-            poly_f_internal::<_, _, LENGTH>(x, n, |i| numerator(LENGTH - i - 1)),
-            poly_f_internal::<_, _, LENGTH>(x, n, |i| denominator(LENGTH - i - 1)),
-        )
+        let mut n = poly_f_internal::<_, _, P>(ix, p, |i| numerator(p - i - 1));
+        let mut d = poly_f_internal::<_, _, Q>(ix, q, |i| denominator(q - i - 1));
+
+        if P != Q || (P == 0 && Q == 0 && p != q) {
+            let mut p = p;
+            let mut q = q;
+
+            while p > q {
+                p -= 1;
+                n = n * x;
+            }
+
+            while q > p {
+                q -= 1;
+                d = d * x;
+            }
+        }
+
+        (n, d)
     } else {
         (
-            poly_f_internal::<_, _, LENGTH>(x, n, numerator),
-            poly_f_internal::<_, _, LENGTH>(x, n, denominator),
+            poly_f_internal::<_, _, P>(x, p, numerator),
+            poly_f_internal::<_, _, Q>(x, q, denominator),
         )
     };
 

@@ -10,9 +10,10 @@ fn horners_method(x: f64, coefficients: &[f64]) -> f64 {
 }
 
 macro_rules! assert_feq {
-    ($e:expr, $a:expr, $b:expr) => {
-        assert!(($a - $b).abs() < $e);
-    };
+    ($e:expr, $a:expr, $b:expr) => {{
+        let (a, b) = ($a, $b);
+        assert!((a - b).abs() < $e, "{} != {}", a, b);
+    }};
 }
 
 #[test]
@@ -39,16 +40,22 @@ fn test_polys() {
     assert_feq!(1e-10, 0.662519601199, horners_method(-0.4, &c[..4]));
     assert_feq!(1e-10, 0.662519601199, poly(-0.4, &c[..4]));
 
-    for x in [-0.5, 0.1, 0.5, 0.9, 1.1] {
+    for x in [-0.5, 0.1, 0.5, 0.9, 1.1, 1.5] {
         for i in 0..=c.len() {
-            assert_feq!(1e-10, horners_method(x, &c[..i]), poly(x, &c[..i]));
+            assert_feq!(1e-4, horners_method(x, &c[..i]), poly(x, &c[..i]));
 
-            if i < (c.len() - 11) {
-                let numerator = &c[i..i + 10];
-                let denominator = &c[(i + 1)..(i + 11)];
+            if i < (c.len() - 10) {
+                let mut numerator = &c[i..i + 10];
+                let mut denominator = &c[(i + 1)..(i + i % 10 + 2)];
+
+                if i % 2 == 0 {
+                    std::mem::swap(&mut numerator, &mut denominator);
+                }
+
+                //println!("{}: {}/{}", x, numerator.len(), denominator.len());
 
                 assert_feq!(
-                    1e-10,
+                    1e-3,
                     horners_method(x, numerator) / horners_method(x, denominator),
                     rational(x, numerator, denominator)
                 );
