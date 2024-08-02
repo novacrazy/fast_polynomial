@@ -214,41 +214,59 @@ where
 {
     let one = F::one();
 
-    // static or dynamic degree
+    // static or dynamic degree checks
     let high_degree = (P > 2 || Q > 2) || (P == 0 && Q == 0 && (p > 2 || q > 2));
 
     // if the length is greater than 2 (degree >= 2) the multiplication will be performed
     // anyway, and LLVM will reuse this result for the non-inverted polynomial below.
-    let (numerator, denominator) = if high_degree && (x * x) > one {
-        let ix = one / x;
-
-        let mut n = poly_f_internal::<_, _, P>(ix, p, |i| numerator(p - i - 1));
-        let mut d = poly_f_internal::<_, _, Q>(ix, q, |i| denominator(q - i - 1));
-
-        if P != Q || (P == 0 && Q == 0 && p != q) {
-            let mut p = p;
-            let mut q = q;
-
-            while p > q {
-                p -= 1;
-                n = n * x;
-            }
-
-            while q > p {
-                q -= 1;
-                d = d * x;
-            }
+    if high_degree && (x * x) > one {
+        if P > 0 && p != P {
+            unsafe { core::hint::unreachable_unchecked() }
         }
 
-        (n, d)
-    } else {
-        (
-            poly_f_internal::<_, _, P>(x, p, numerator),
-            poly_f_internal::<_, _, Q>(x, q, denominator),
-        )
-    };
+        if Q > 0 && q != Q {
+            unsafe { core::hint::unreachable_unchecked() }
+        }
 
-    numerator / denominator
+        // To prevent large values of x from exploding to infinity, we can replace x with z=1/x
+        // and evaluate the polynomial in z to keep the powers of x within -1 and 1 where
+        // floats are most accurate.
+
+        let z = one / x;
+
+        let n = poly_f_internal::<_, _, P>(z, p, |i| numerator(p - i - 1));
+        let d = poly_f_internal::<_, _, Q>(z, q, |i| denominator(q - i - 1));
+
+        let mut res = n / d;
+
+        // no correction needed for same-degree rational polynomials
+        if P == Q && (P > 0 || p == q) {
+            return res;
+        }
+
+        // when the degree of the numerator and denominator are different, we need to correct
+        // the result by shifting over the difference in degrees
+        let (mut u, mut e) = if p < q { (z, q - p) } else { (x, p - q) };
+
+        // `res = res * powi(u, e)` assuming e > 0
+        // because e > 0 we can jump straight into the loop without a pre-check,
+        // and avoid an extra square of u at the end
+        loop {
+            if e & 1 != 0 {
+                res = res * u;
+            }
+
+            e >>= 1;
+
+            if e == 0 {
+                return res;
+            }
+
+            u = u * u;
+        }
+    } else {
+        poly_f_internal::<_, _, P>(x, p, numerator) / poly_f_internal::<_, _, Q>(x, q, denominator)
+    }
 }
 
 #[inline(always)]

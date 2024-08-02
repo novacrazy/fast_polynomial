@@ -71,10 +71,26 @@ Note that it uses multiple xmm registers, as the first two `vfmadd213ss` instruc
 will also likely run in parallel to those FMAs. Despite being more individual instructions, because they run in parallel on hardware,
 this will be significantly faster.
 
-## Disadvantages
+## Rational Polynomials
+
+`fast_polynomial` supports evaluating rational polynomials such as those found in [Padé approximations](https://en.wikipedia.org/wiki/Pad%C3%A9_approximant), but with an **important note**: To avoid powers of the input `x` exploding, we perform a technique where we replace `x`
+with `z = 1/x` and evaluate the polynomial effectively in reverse:
+
+<details>
+<summary>Click to open rendered example</summary>
+
+If this isn't rendered for you, [view it on the GitHub readme](https://github.com/novacrazy/fast_polynomial/blob/main/README.md#rational-polynomials).
+
+$$ \begin{align} \frac{a_0 + a_1 x + a_2 x^2}{b_0 + b_1 x + b_2 x^2} &= \frac{a_0 + a_1 z^{-1} + a_2 z^{-2}}{b_0 + b_1 z^{-1} + b_2 z^{-2}} \\ &= \frac{a_0 z^2 + a_1 z + a_2}{b_0 z^2 + b_1 z + b_2} \\ &= \frac{a_2 + a_1 z + a_0 z^2}{b_2 + b_1 z + b_0 z^2} \\ \end{align} $$
+
+</details>
+
+However, should the numerator and denominator have different degrees, an additional correction step is required to shift over the degrees to match, which can reduce performance and potentially accuracy, so it should be avoided. It may genuinely be faster to pad your polynomials to the same degree, especially if using `rational_array` to avoid excessive codegen.
+
+## Other Disadvantages
 
 Estrin's scheme is slightly more numerically unstable for very high-degree polynomials. However, using FMA and the
-provided rational polynomial evaluation routines both improve numerical stability.
+provided rational polynomial evaluation routines both improve numerical stability where possible.
 
 ## Additional notes
 
