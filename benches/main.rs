@@ -23,7 +23,7 @@ pub fn horners_method<F: Float>(x: F, coeffs: &[F]) -> F {
 
 fn criterion_benchmark(c: &mut Criterion) {
     #[rustfmt::skip]
-    let coeffs = black_box([
+    let all_coeffs = black_box([
         0.9066094402137101, 0.7030666449646632, 0.8062843184510005, 1.4354479997076703, 1.1700851966666594,
         1.0036799628327977, 0.669178962803656, 0.7728758968389648, 0.5606587385173203, 1.0939290310925256,
         0.8620002023538906, 1.2530914565673503, 1.4918792702029815, 1.3154976283644524, 1.3564397050359411,
@@ -183,9 +183,15 @@ fn criterion_benchmark(c: &mut Criterion) {
         256 + 128,
         512,
         600,
-        coeffs.len(),
+        all_coeffs.len(),
     ] {
-        let coeffs = &coeffs[..i];
+        let coeffs = black_box(&all_coeffs[..i]);
+
+        let sub_coeffs = black_box(if i < (all_coeffs.len() - 100) {
+            &all_coeffs[i..(i + i % 100)]
+        } else {
+            &all_coeffs[0..20]
+        });
 
         g.bench_function(format!("{:04}: Estrin's Scheme", coeffs.len()), |b| {
             b.iter(|| {
@@ -202,6 +208,17 @@ fn criterion_benchmark(c: &mut Criterion) {
                 }
             });
         });
+
+        for x in black_box([-1.5, 0.5, 1.5]) {
+            let id = format!("Rational({x}): {:04}/{:04}", coeffs.len(), sub_coeffs.len());
+            g.bench_function(id, |b| {
+                b.iter(|| {
+                    for _ in 0..100 {
+                        black_box(fast_polynomial::rational(x, coeffs, sub_coeffs));
+                    }
+                });
+            });
+        }
     }
 
     g.finish();
