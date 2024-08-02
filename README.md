@@ -81,7 +81,13 @@ with `z = 1/x` and evaluate the polynomial effectively in reverse:
 
 If this isn't rendered for you, [view it on the GitHub readme](https://github.com/novacrazy/fast_polynomial/blob/main/README.md#rational-polynomials).
 
-$$ \begin{align} \frac{a_0 + a_1 x + a_2 x^2}{b_0 + b_1 x + b_2 x^2} &= \frac{a_0 + a_1 z^{-1} + a_2 z^{-2}}{b_0 + b_1 z^{-1} + b_2 z^{-2}} \\ &= \frac{a_0 z^2 + a_1 z + a_2}{b_0 z^2 + b_1 z + b_2} \\ &= \frac{a_2 + a_1 z + a_0 z^2}{b_2 + b_1 z + b_0 z^2} \\ \end{align} $$
+```math
+\begin{align}
+    \frac{a_0 + a_1 x + a_2 x^2}{b_0 + b_1 x + b_2 x^2} &= \frac{a_0 + a_1 z^{-1} + a_2 z^{-2}}{b_0 + b_1 z^{-1} + b_2 z^{-2}} \\
+        &= \frac{a_0 z^2 + a_1 z + a_2}{b_0 z^2 + b_1 z + b_2} \\
+        &= \frac{a_2 + a_1 z + a_0 z^2}{b_2 + b_1 z + b_0 z^2} \\
+\end{align}
+```
 
 </details>
 
