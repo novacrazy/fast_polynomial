@@ -200,6 +200,7 @@ where
     rational_f_internal::<F, _, _, P, Q>(x, P, Q, numerator, denomiator)
 }
 
+#[rustfmt::skip]
 #[inline(always)]
 fn rational_f_internal<F: PolyRational, N, D, const P: usize, const Q: usize>(
     x: F,
@@ -220,13 +221,8 @@ where
     // if the length is greater than 2 (degree >= 2) the multiplication will be performed
     // anyway, and LLVM will reuse this result for the non-inverted polynomial below.
     if high_degree && (x * x) > one {
-        if P > 0 && p != P {
-            unsafe { core::hint::unreachable_unchecked() }
-        }
-
-        if Q > 0 && q != Q {
-            unsafe { core::hint::unreachable_unchecked() }
-        }
+        if P > 0 { unsafe { assume(p == P) } }
+        if Q > 0 { unsafe { assume(q == Q) } }
 
         // To prevent large values of x from exploding to infinity, we can replace x with z=1/x
         // and evaluate the polynomial in z to keep the powers of x within -1 and 1 where
@@ -240,7 +236,7 @@ where
         let mut res = n / d;
 
         // no correction needed for same-degree rational polynomials
-        if P == Q && (P > 0 || p == q) {
+        if P == Q && (P > 0 || likely(p == q)) {
             return res;
         }
 
@@ -250,19 +246,37 @@ where
 
         // `res = res * powi(u, e)` assuming e > 0
         // because e > 0 we can jump straight into the loop without a pre-check,
-        // and avoid an extra square of u at the end
-        loop {
-            if e & 1 != 0 {
-                res = res * u;
+        // and rearrange some checks into a happy path.
+
+        if P > 0 && Q > 0 {
+            // this version optimizes better for static lengths
+            loop {
+                if e & 1 != 0 {
+                    res = res * u;
+                }
+
+                e >>= 1;
+
+                if e == 0 {
+                    return res;
+                }
+
+                u = u * u;
             }
+        } else {
+            // and this version optimizes better for dynamic lengths
+            loop {
+                if e & 1 != 0 {
+                    res = res * u;
 
-            e >>= 1;
+                    if e == 1 {
+                        return res;
+                    }
+                }
 
-            if e == 0 {
-                return res;
+                e >>= 1;
+                u = u * u;
             }
-
-            u = u * u;
         }
     } else {
         poly_f_internal::<_, _, P>(x, p, numerator) / poly_f_internal::<_, _, Q>(x, q, denominator)
@@ -277,9 +291,8 @@ where
 {
     use polynomials::*;
 
-    // if LENGTH is used, assume n = LENGTH to improve codegen
-    if LENGTH > 0 && n != LENGTH {
-        unsafe { core::hint::unreachable_unchecked() };
+    if LENGTH > 0 {
+        unsafe { assume(n == LENGTH) };
     }
 
     macro_rules! poly {
@@ -351,4 +364,21 @@ where
     };
 
     fma(sum, rmx, res)
+}
+
+#[inline(always)]
+#[cold]
+fn cold() {}
+
+#[inline(always)]
+#[rustfmt::skip]
+fn likely(b: bool) -> bool {
+    if !b { cold() } b
+}
+
+#[inline(always)]
+unsafe fn assume(cond: bool) {
+    if !cond {
+        core::hint::unreachable_unchecked();
+    }
 }
