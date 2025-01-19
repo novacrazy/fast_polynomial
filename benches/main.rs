@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unreadable_literal,
+    clippy::inline_always,
+    clippy::too_many_lines
+)]
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use num_traits::Float;

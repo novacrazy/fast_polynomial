@@ -103,16 +103,29 @@ impl<T> PolyNum for T where
 {
 }
 
+#[cfg(feature = "fma")]
+pub trait PolyInOut<F>: PolyNum + MulAdd<F, Self, Output = Self> {}
+
+#[cfg(feature = "fma")]
+impl<F, T> PolyInOut<F> for T where T: PolyNum + MulAdd<F, Self, Output = Self> {}
+
+#[cfg(not(feature = "fma"))]
+pub trait PolyInOut<F>: PolyNum + Mul<F, Output = Self> {}
+
+#[cfg(not(feature = "fma"))]
+impl<F, T> PolyInOut<F> for T where T: PolyNum + Mul<F, Output = Self> {}
+
+#[allow(clippy::inline_always)]
 #[inline(always)]
-fn fma<F: PolyNum>(x: F, m: F, a: F) -> F {
+fn fma<F0: PolyInOut<F>, F: PolyNum>(x: F0, m: F, a: F0) -> F0 {
     #[cfg(feature = "fma")]
     return x.mul_add(m, a);
-
     #[cfg(not(feature = "fma"))]
     return x * m + a;
 }
 
 pub mod polynomials;
+pub mod many_xs;
 
 /// Evaluate a polynomial for an array of coefficients. Can be monomorphized.
 ///
@@ -121,8 +134,11 @@ pub mod polynomials;
 /// other methods such as [`poly`] may require to support many lengths. This function will
 /// be faster, put simply.
 #[inline]
-pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
-    poly_f_internal::<F, _, N>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
+pub fn poly_array<F0: PolyInOut<F> + From<F>, F: PolyNum, const N: usize>(
+    x: F0,
+    coeffs: &[F; N],
+) -> F0 {
+    poly_f_internal::<F0, F, _, N>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
 /// Evaluate a rational functions for two arrays of coefficients. Can be monomorphized.
@@ -132,15 +148,20 @@ pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
 /// other methods such as [`poly`] may require to support many lengths. This function will
 /// be faster, put simply.
 #[inline]
-pub fn pade_arrays<F: PolyNum + core::ops::Div<F, Output = F>, const N: usize, const M: usize>(
-    x: F,
+pub fn pade_arrays<
+    F0: PolyInOut<F> + From<F> + core::ops::Div<F0, Output = F0>,
+    F: PolyNum,
+    const N: usize,
+    const M: usize,
+>(
+    x: F0,
     num_coeffs: &[F; N],
     den_coeffs: &[F; M],
-) -> F {
-    let num = poly_f_internal::<F, _, N>(x, num_coeffs.len(), |i| unsafe {
+) -> F0 {
+    let num = poly_f_internal::<F0, F, _, N>(x, num_coeffs.len(), |i| unsafe {
         *num_coeffs.get_unchecked(i)
     });
-    let den = poly_f_internal::<F, _, M>(x, den_coeffs.len(), |i| unsafe {
+    let den = poly_f_internal::<F0, F, _, M>(x, den_coeffs.len(), |i| unsafe {
         *den_coeffs.get_unchecked(i)
     });
     num / den
@@ -150,57 +171,58 @@ pub fn pade_arrays<F: PolyNum + core::ops::Div<F, Output = F>, const N: usize, c
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`poly_array`] instead if possible.
-pub fn poly<F: PolyNum>(x: F, coeffs: &[F]) -> F {
-    poly_f_internal::<F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
+pub fn poly<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, coeffs: &[F]) -> F0 {
+    poly_f_internal::<F0, F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
 /// Evaluate a rational function for two slices of coefficients. May not be monomorphized.
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`pade_arrays`] instead if possible.
-pub fn pade<F: PolyNum + core::ops::Div<F, Output = F>>(
-    x: F,
+pub fn pade<F0: PolyInOut<F> + From<F> + core::ops::Div<F0, Output = F0>, F: PolyNum>(
+    x: F0,
     num_coeffs: &[F],
     den_coeffs: &[F],
-) -> F {
-    let num = poly_f_internal::<F, _, 0>(x, num_coeffs.len(), |i| unsafe {
+) -> F0 {
+    let num = poly_f_internal::<F0, F, _, 0>(x, num_coeffs.len(), |i| unsafe {
         *num_coeffs.get_unchecked(i)
     });
-    let den = poly_f_internal::<F, _, 0>(x, den_coeffs.len(), |i| unsafe {
+    let den = poly_f_internal::<F0, F, _, 0>(x, den_coeffs.len(), |i| unsafe {
         *den_coeffs.get_unchecked(i)
     });
     num / den
 }
 
 /// Evaluate a polynomial using a function to provide coefficients.
-pub fn poly_f<F: PolyNum, G>(x: F, n: usize, g: G) -> F
+pub fn poly_f<F0: PolyInOut<F> + From<F>, F: PolyNum, G>(x: F0, n: usize, g: G) -> F0
 where
     G: FnMut(usize) -> F,
 {
-    poly_f_internal::<F, _, 0>(x, n, g)
+    poly_f_internal::<F0, F, _, 0>(x, n, g)
 }
 
 /// Evaluate a rational functions using two functions to provide coefficients.
-pub fn pade_f<F: PolyNum + core::ops::Div<F, Output = F>, G>(
-    x: F,
+pub fn pade_f<F0: PolyInOut<F> + From<F> + core::ops::Div<F0, Output = F0>, F: PolyNum, G>(
+    x: F0,
     n: usize,
     g_num: G,
     g_den: G,
-) -> F
+) -> F0
 where
     G: FnMut(usize) -> F,
 {
-    let num = poly_f_internal::<F, _, 0>(x, n, g_num);
-    let den = poly_f_internal::<F, _, 0>(x, n, g_den);
+    let num = poly_f_internal::<F0, F, _, 0>(x, n, g_num);
+    let den = poly_f_internal::<F0, F, _, 0>(x, n, g_den);
     num / den
 }
 
 #[inline(always)]
 #[rustfmt::skip]
-fn poly_f_internal<F: PolyNum, G, const LENGTH: usize>(x: F, n: usize, mut g: G) -> F
+fn poly_f_internal<F0: PolyInOut<F> + From<F>, F: PolyNum, G, const LENGTH: usize>(x: F0, n: usize, mut g: G) -> F0
 where
     G: FnMut(usize) -> F,
 {
+    #![allow(clippy::wildcard_imports)]
     use polynomials::*;
 
     // if LENGTH is used, assume n = LENGTH to improve codegen
@@ -210,9 +232,9 @@ where
 
     // fast path for small input
     match n {
-        0 => return F::zero(),
-        1 => return g(0),
-        2 => return poly_1(x, g(0), g(1)),
+        0 => return F0::zero(),
+        1 => return g(0).into(),
+        2 => return poly_1::<F0,F>(x, g(0), g(1)),
         3 => return poly_2(x, x * x, g(0), g(1), g(2)),
         4 => return poly_3(x, x * x, g(0), g(1), g(2), g(3)),
         _ => {}
@@ -238,12 +260,13 @@ where
         _ => {}
     }
 
+    #[allow(clippy::items_after_statements)]
     const MAX_DEGREE_P0: usize = 16;
 
     let x16 = x8 * x8;
     let xmd = x16; // x.powi(MAX_DEGREE_P0 as i32);
 
-    let mut sum = F::zero();
+    let mut sum = F0::zero();
 
     // Use a hybrid Estrin/Horner algorithm
     let mut j = n;
@@ -255,13 +278,13 @@ where
         }
 
         j -= MAX_DEGREE_P0;
-        sum = fma(sum, xmd, poly!(poly_15(x, x2, x4, x8; j + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])));
+        sum = fma::<F0,F0>(sum, xmd, poly!(poly_15(x, x2, x4, x8; j + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])));
     }
 
     // handle remaining powers
     let (rmx, res) = match j {
         0  => return sum,
-        1  => (x,                                  g(0)),
+        1  => (x,                                  g(0).into()),
         2  => (x2,          poly_1 (x,             g(0), g(1))),
         3  => (x2*x,        poly_2 (x, x2,         g(0), g(1), g(2))),
         4  => (x4,          poly_3 (x, x2,         g(0), g(1), g(2), g(3))),
@@ -279,5 +302,5 @@ where
         _  => unsafe { core::hint::unreachable_unchecked() }
     };
 
-    fma(sum, rmx, res)
+    fma::<F0,F0>(sum, rmx, res)
 }
