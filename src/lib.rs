@@ -132,10 +132,18 @@ pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
 /// other methods such as [`poly`] may require to support many lengths. This function will
 /// be faster, put simply.
 #[inline]
-pub fn pade_arrays<F: PolyNum+core::ops::Div<F,Output=F>, const N: usize, const M: usize>(x: F, num_coeffs: &[F; N], den_coeffs: &[F; M]) -> F {
-    let num = poly_f_internal::<F, _, N>(x, num_coeffs.len(), |i| unsafe { *num_coeffs.get_unchecked(i) });
-    let den = poly_f_internal::<F, _, M>(x, den_coeffs.len(), |i| unsafe { *den_coeffs.get_unchecked(i) });
-    num/den
+pub fn pade_arrays<F: PolyNum + core::ops::Div<F, Output = F>, const N: usize, const M: usize>(
+    x: F,
+    num_coeffs: &[F; N],
+    den_coeffs: &[F; M],
+) -> F {
+    let num = poly_f_internal::<F, _, N>(x, num_coeffs.len(), |i| unsafe {
+        *num_coeffs.get_unchecked(i)
+    });
+    let den = poly_f_internal::<F, _, M>(x, den_coeffs.len(), |i| unsafe {
+        *den_coeffs.get_unchecked(i)
+    });
+    num / den
 }
 
 /// Evaluate a polynomial for a slice of coefficients. May not be monomorphized.
@@ -150,10 +158,18 @@ pub fn poly<F: PolyNum>(x: F, coeffs: &[F]) -> F {
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`pade_arrays`] instead if possible.
-pub fn pade<F: PolyNum + core::ops::Div<F,Output=F>>(x: F, num_coeffs: &[F], den_coeffs: &[F]) -> F {
-    let num = poly_f_internal::<F, _, 0>(x, num_coeffs.len(), |i| unsafe { *num_coeffs.get_unchecked(i) });
-    let den = poly_f_internal::<F, _, 0>(x, den_coeffs.len(), |i| unsafe { *den_coeffs.get_unchecked(i) });
-    num/den
+pub fn pade<F: PolyNum + core::ops::Div<F, Output = F>>(
+    x: F,
+    num_coeffs: &[F],
+    den_coeffs: &[F],
+) -> F {
+    let num = poly_f_internal::<F, _, 0>(x, num_coeffs.len(), |i| unsafe {
+        *num_coeffs.get_unchecked(i)
+    });
+    let den = poly_f_internal::<F, _, 0>(x, den_coeffs.len(), |i| unsafe {
+        *den_coeffs.get_unchecked(i)
+    });
+    num / den
 }
 
 /// Evaluate a polynomial using a function to provide coefficients.
@@ -165,13 +181,18 @@ where
 }
 
 /// Evaluate a rational functions using two functions to provide coefficients.
-pub fn pade_f<F: PolyNum+core::ops::Div<F,Output=F>, G>(x: F, n: usize, g_num: G, g_den: G) -> F
+pub fn pade_f<F: PolyNum + core::ops::Div<F, Output = F>, G>(
+    x: F,
+    n: usize,
+    g_num: G,
+    g_den: G,
+) -> F
 where
     G: FnMut(usize) -> F,
 {
     let num = poly_f_internal::<F, _, 0>(x, n, g_num);
     let den = poly_f_internal::<F, _, 0>(x, n, g_den);
-    num/den
+    num / den
 }
 
 #[inline(always)]
