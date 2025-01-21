@@ -1,5 +1,3 @@
-#![allow(clippy::unreadable_literal)]
-
 use fast_polynomial::{poly, rational};
 
 // version from readme
@@ -18,6 +16,7 @@ macro_rules! assert_feq {
     }};
 }
 
+#[allow(clippy::unreadable_literal)]
 #[test]
 fn test_polys() {
     #[rustfmt::skip]
@@ -66,6 +65,7 @@ fn test_polys() {
     }
 }
 
+#[allow(clippy::unreadable_literal)]
 #[test]
 fn test_all_at_once() {
     use fast_polynomial::many_xs::ArrayWrap;
@@ -82,6 +82,7 @@ fn test_all_at_once() {
         1.1274404084913705, 0.6266756469558616,
     ];
 
+    #[allow(clippy::items_after_statements)]
     const NUM_XS: usize = 5;
     let all_xs: [_; NUM_XS] = [-0.5, 0.1, 0.5, 0.9, 1.1];
     let all_xs_wrapped = ArrayWrap::new(all_xs);

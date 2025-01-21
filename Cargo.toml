@@ -16,6 +16,7 @@ repository = "https://github.com/novacrazy/fast_polynomial"
 default = ["std"]
 std = ["num-traits/std"]
 libm = ["num-traits/libm"]
+fma = ["num-traits/libm","num-traits/std"]
 
 [dependencies]
 num-traits = { version = "0.2", default-features = false }

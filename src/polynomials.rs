@@ -290,6 +290,7 @@ pub fn poly_15<F0: PolyInOut<F> + From<F>, F: PolyNum>(
     )
 }
 
+#[allow(dead_code)]
 #[rustfmt::skip]
 #[inline(always)]
 pub fn poly_30<F0: PolyInOut<F> + From<F>, F: PolyNum>(

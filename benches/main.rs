@@ -1,13 +1,8 @@
-#![allow(
-    clippy::unreadable_literal,
-    clippy::inline_always,
-    clippy::too_many_lines
-)]
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use num_traits::Float;
 
+#[allow(clippy::inline_always)]
 #[inline(always)]
 pub fn horners_method_f<F: Float, G>(x: F, mut n: usize, mut g: G) -> F
 where
@@ -27,8 +22,10 @@ pub fn horners_method<F: Float>(x: F, coeffs: &[F]) -> F {
     horners_method_f(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
+#[allow(clippy::too_many_lines)]
 fn criterion_benchmark(c: &mut Criterion) {
     #[rustfmt::skip]
+    #[allow(clippy::unreadable_literal)]
     let all_coeffs = black_box([
         0.9066094402137101, 0.7030666449646632, 0.8062843184510005, 1.4354479997076703, 1.1700851966666594,
         1.0036799628327977, 0.669178962803656, 0.7728758968389648, 0.5606587385173203, 1.0939290310925256,

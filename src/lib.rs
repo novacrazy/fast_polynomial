@@ -1,68 +1,13 @@
 #![no_std]
 #![doc = include_str!("../README.md")]
+#![allow(clippy::inline_always)]
 
-use core::ops::{Add, Div, Mul, Neg};
-use num_traits::{MulAdd, One, Zero};
+use traits::{PolyInOut, PolyNum, PolyRationalInOut};
 
-/// The minimum required functionality for a number to evaluated in a polynomial. [`MulAdd`]
-/// is required to allow for the fused multiply-add operation to be used, which can be
-/// faster and more numerically stable than separate multiply and add operations.
-///
-/// # Note
-///
-/// For fused multiply-add to be used, the target feature `fma` must be enabled. This can be
-/// done by editing your `RUSTFLAGS` environment variable to include `-C target-feature=+fma`,
-/// or by editing your `.cargo/config.toml` to include:
-///
-/// ```toml
-/// [build]
-/// rustflags = ["-C", "target-feature=+fma"]
-/// ```
-pub trait PolyNum:
-    Sized
-    + Copy
-    + Zero
-    + Add<Self, Output = Self>
-    + Mul<Self, Output = Self>
-    + MulAdd<Self, Self, Output = Self>
-{
-}
+pub mod many_xs;
+mod polynomials;
+mod traits;
 
-/// Extension of [`PolyNum`] for numbers that can be evaluated in a rational polynomial.
-///
-/// [`One`] and [`PartialOrd`] are required to perform a specific optimization for rational
-/// polynomials wherein the input is inverted if the absolute value of the input is greater than 1.
-/// This is useful for numerical stability, as it keeps the powers of the input within the range of 0 to 1.
-pub trait PolyRational: PolyNum + One + Div<Self, Output = Self> + PartialOrd {}
-
-impl<T> PolyNum for T where
-    T: Sized
-        + Copy
-        + Zero
-        + Add<Self, Output = Self>
-        + Mul<Self, Output = Self>
-        + MulAdd<Self, Self, Output = Self>
-{
-}
-
-impl<T> PolyRational for T where
-    T: PolyNum + One + Neg<Output = Self> + Div<Self, Output = Self> + PartialOrd
-{
-}
-
-#[cfg(feature = "fma")]
-pub trait PolyInOut<F>: PolyNum + MulAdd<F, Self, Output = Self> {}
-
-#[cfg(feature = "fma")]
-impl<F, T> PolyInOut<F> for T where T: PolyNum + MulAdd<F, Self, Output = Self> {}
-
-#[cfg(not(feature = "fma"))]
-pub trait PolyInOut<F>: PolyNum + Mul<F, Output = Self> {}
-
-#[cfg(not(feature = "fma"))]
-impl<F, T> PolyInOut<F> for T where T: PolyNum + Mul<F, Output = Self> {}
-
-#[allow(clippy::inline_always)]
 #[inline(always)]
 fn fma<F0: PolyInOut<F>, F: PolyNum>(x: F0, m: F, a: F0) -> F0 {
     #[cfg(feature = "fma")]
@@ -70,9 +15,6 @@ fn fma<F0: PolyInOut<F>, F: PolyNum>(x: F0, m: F, a: F0) -> F0 {
     #[cfg(not(feature = "fma"))]
     return x * m + a;
 }
-
-pub mod many_xs;
-pub mod polynomials;
 
 /// Evaluate a polynomial for an array of coefficients. Can be monomorphized.
 ///
@@ -88,25 +30,6 @@ pub fn poly_array<F0: PolyInOut<F1> + From<F1>, F1: PolyNum, const N: usize>(
     poly_f_n::<F0, F1, _, N>(x, |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
-/// Evaluate a rational polynomial for an array of coefficients. Can be monomorphized.
-///
-/// To be monomorphized means a dedicated instance of this code will be generated for
-/// the array of this length, removing many/all branches within the internal code that
-/// other methods such as [`rational`] may require to support many lengths. This function will
-/// be faster, put simply.
-#[inline(always)]
-pub fn rational_array<F: PolyRational, const P: usize, const Q: usize>(
-    x: F,
-    numerator: &[F; P],
-    denomiator: &[F; Q],
-) -> F {
-    rational_f_n::<F, _, _, P, Q>(
-        x,
-        |i| unsafe { *numerator.get_unchecked(i) },
-        |i| unsafe { *denomiator.get_unchecked(i) },
-    )
-}
-
 /// More flexible variant of [`poly_array`]
 #[inline(always)]
 pub fn poly_array_t<F0, F1, T, const N: usize>(x: F0, coeffs: &[T; N]) -> F0
@@ -118,61 +41,12 @@ where
     poly_f_n::<F0, F1, _, N>(x, |i| unsafe { coeffs.get_unchecked(i).clone().into() })
 }
 
-/// More flexible variant of [`rational_array`]
-#[inline(always)]
-pub fn rational_array_t<F: PolyRational, T, const P: usize, const Q: usize>(
-    x: F,
-    numerator: &[T; P],
-    denomiator: &[T; Q],
-) -> F
-where
-    T: Clone + Into<F>,
-{
-    rational_f_n::<F, _, _, P, Q>(
-        x,
-        |i| unsafe { numerator.get_unchecked(i).clone().into() },
-        |i| unsafe { denomiator.get_unchecked(i).clone().into() },
-    )
-}
-
 /// Evaluate a polynomial for a slice of coefficients. May not be monomorphized.
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`poly_array`] instead if possible.
 pub fn poly<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, coeffs: &[F]) -> F0 {
     poly_f_internal::<F0, F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
-}
-
-/// Evaluate a rational function for two slices of coefficients. May not be monomorphized.
-///
-/// To not be monomorphized means this function's codegen may be used for any number of coefficients,
-/// and therefore contains branches. It will be faster to use [`pade_arrays`] instead if possible.
-pub fn pade<F0: PolyInOut<F> + From<F> + core::ops::Div<F0, Output = F0>, F: PolyNum>(
-    x: F0,
-    num_coeffs: &[F],
-    den_coeffs: &[F],
-) -> F0 {
-    let num = poly_f_internal::<F0, F, _, 0>(x, num_coeffs.len(), |i| unsafe {
-        *num_coeffs.get_unchecked(i)
-    });
-    let den = poly_f_internal::<F0, F, _, 0>(x, den_coeffs.len(), |i| unsafe {
-        *den_coeffs.get_unchecked(i)
-    });
-    num / den
-}
-
-/// Evaluate a rational polynomial for an array of coefficients. May not be monomorphized.
-///
-/// To not be monomorphized means this function's codegen may be used for any number of coefficients,
-/// and therefore contains branches. It will be faster to use [`rational_array`] instead if possible.
-pub fn rational<F: PolyRational>(x: F, numerator: &[F], denominator: &[F]) -> F {
-    rational_f_internal::<F, _, _, 0, 0>(
-        x,
-        numerator.len(),
-        denominator.len(),
-        |i| unsafe { *numerator.get_unchecked(i) },
-        |i| unsafe { *denominator.get_unchecked(i) },
-    )
 }
 
 /// Evaluate a polynomial using a function to provide coefficients.
@@ -188,130 +62,12 @@ where
     poly_f_internal::<F0, F, _, 0>(x, n, g)
 }
 
-/// Evaluate a rational polynomial using a function to provide coefficients.
-///
-/// To preserve numerical stability, the rational polynomial is evaluated using the reciprocal of the input
-/// if the absolute value of the input `x` is greater than 1. Coefficients will be evaluated
-/// in reverse order in this case, forward otherwise. This technique
-/// helps keep the powers of `x` in the polynomial within -1 and 1, which is important for
-/// numerical stability.
-///
-/// This function is more flexible than [`rational`] as it allows for the coefficients to be
-/// generated on-the-fly. This can be useful for generating coefficients that are not
-/// known at compile-time. However, this function may be slower than [`rational`] due to the
-/// lack of monomorphization optimizations.
-#[inline]
-pub fn rational_f<F: PolyRational, N, D>(x: F, p: usize, q: usize, numerator: N, denomiator: D) -> F
-where
-    N: FnMut(usize) -> F,
-    D: FnMut(usize) -> F,
-{
-    rational_f_internal::<F, _, _, 0, 0>(x, p, q, numerator, denomiator)
-}
-
 /// Variation of [`poly_f`] that is monomorphized for a specific number of coefficients.
 pub fn poly_f_n<F0: PolyInOut<F> + From<F>, F: PolyNum, G, const N: usize>(x: F0, g: G) -> F0
 where
     G: FnMut(usize) -> F,
 {
     poly_f_internal::<F0, F, _, 0>(x, N, g)
-}
-
-/// Variation of [`rational_f`] that is monomorphized for a specific number of coefficients.
-#[inline]
-pub fn rational_f_n<F: PolyRational, N, D, const P: usize, const Q: usize>(
-    x: F,
-    numerator: N,
-    denomiator: D,
-) -> F
-where
-    N: FnMut(usize) -> F,
-    D: FnMut(usize) -> F,
-{
-    rational_f_internal::<F, _, _, P, Q>(x, P, Q, numerator, denomiator)
-}
-
-#[rustfmt::skip]
-#[inline(always)]
-fn rational_f_internal<F: PolyRational, N, D, const P: usize, const Q: usize>(
-    x: F,
-    p: usize,
-    q: usize,
-    mut numerator: N,
-    mut denominator: D,
-) -> F
-where
-    N: FnMut(usize) -> F,
-    D: FnMut(usize) -> F,
-{
-    let one = F::one();
-
-    // static or dynamic degree checks
-    let high_degree = (P > 2 || Q > 2) || (P == 0 && Q == 0 && (p > 2 || q > 2));
-
-    // if the length is greater than 2 (degree >= 2) the multiplication will be performed
-    // anyway, and LLVM will reuse this result for the non-inverted polynomial below.
-    if high_degree && (x * x) > one {
-        if P > 0 { unsafe { assume(p == P) } }
-        if Q > 0 { unsafe { assume(q == Q) } }
-
-        // To prevent large values of x from exploding to infinity, we can replace x with z=1/x
-        // and evaluate the polynomial in z to keep the powers of x within -1 and 1 where
-        // floats are most accurate.
-
-        let z = one / x;
-
-        let n = poly_f_internal::<_,_, _, P>(z, p, |i| numerator(p - i - 1));
-        let d = poly_f_internal::<_,_, _, Q>(z, q, |i| denominator(q - i - 1));
-
-        let mut res = n / d;
-
-        // no correction needed for same-degree rational polynomials
-        if P == Q && (P > 0 || likely(p == q)) {
-            return res;
-        }
-
-        // when the degree of the numerator and denominator are different, we need to correct
-        // the result by shifting over the difference in degrees
-        let (mut u, mut e) = if p < q { (z, q - p) } else { (x, p - q) };
-
-        // `res = res * powi(u, e)` assuming e > 0
-        // because e > 0 we can jump straight into the loop without a pre-check,
-        // and rearrange some checks into a happy path.
-
-        if P > 0 && Q > 0 {
-            // this version optimizes better for static lengths
-            loop {
-                if e & 1 != 0 {
-                    res = res * u;
-                }
-
-                e >>= 1;
-
-                if e == 0 {
-                    return res;
-                }
-
-                u = u * u;
-            }
-        } else {
-            // and this version optimizes better for dynamic lengths
-            loop {
-                if e & 1 != 0 {
-                    res = res * u;
-
-                    if e == 1 {
-                        return res;
-                    }
-                }
-
-                e >>= 1;
-                u = u * u;
-            }
-        }
-    } else {
-        poly_f_internal::<_,_, _, P>(x, p, numerator) / poly_f_internal::<_,_, _, Q>(x, q, denominator)
-    }
 }
 
 #[inline(always)]
@@ -396,6 +152,191 @@ where
     };
 
     fma::<F0,F0>(sum, rmx, res)
+}
+
+/// Evaluate a rational polynomial for an array of coefficients. Can be monomorphized.
+///
+/// To be monomorphized means a dedicated instance of this code will be generated for
+/// the array of this length, removing many/all branches within the internal code that
+/// other methods such as [`rational`] may require to support many lengths. This function will
+/// be faster, put simply.
+#[inline(always)]
+pub fn rational_array<F0, F1, const P: usize, const Q: usize>(
+    x: F0,
+    numerator: &[F1; P],
+    denomiator: &[F1; Q],
+) -> F0
+where
+    F0: PolyRationalInOut<F1>,
+    F1: PolyNum,
+{
+    rational_f_n::<F0, F1, _, _, P, Q>(
+        x,
+        |i| unsafe { *numerator.get_unchecked(i) },
+        |i| unsafe { *denomiator.get_unchecked(i) },
+    )
+}
+
+/// More flexible variant of [`rational_array`]
+#[inline(always)]
+pub fn rational_array_t<F0, F1, T, const P: usize, const Q: usize>(
+    x: F0,
+    numerator: &[T; P],
+    denomiator: &[T; Q],
+) -> F0
+where
+    F0: PolyRationalInOut<F1>,
+    F1: PolyNum,
+    T: Clone + Into<F1>,
+{
+    rational_f_n::<F0, F1, _, _, P, Q>(
+        x,
+        |i| unsafe { numerator.get_unchecked(i).clone().into() },
+        |i| unsafe { denomiator.get_unchecked(i).clone().into() },
+    )
+}
+
+/// Evaluate a rational polynomial for an array of coefficients. May not be monomorphized.
+///
+/// To not be monomorphized means this function's codegen may be used for any number of coefficients,
+/// and therefore contains branches. It will be faster to use [`rational_array`] instead if possible.
+pub fn rational<F0: PolyRationalInOut<F1>, F1: PolyNum>(
+    x: F0,
+    numerator: &[F1],
+    denominator: &[F1],
+) -> F0 {
+    rational_f_internal::<F0, F1, _, _, 0, 0>(
+        x,
+        numerator.len(),
+        denominator.len(),
+        |i| unsafe { *numerator.get_unchecked(i) },
+        |i| unsafe { *denominator.get_unchecked(i) },
+    )
+}
+
+/// Evaluate a rational polynomial using a function to provide coefficients.
+///
+/// To preserve numerical stability, the rational polynomial is evaluated using the reciprocal of the input
+/// if the absolute value of the input `x` is greater than 1. Coefficients will be evaluated
+/// in reverse order in this case, forward otherwise. This technique
+/// helps keep the powers of `x` in the polynomial within -1 and 1, which is important for
+/// numerical stability.
+///
+/// This function is more flexible than [`rational`] as it allows for the coefficients to be
+/// generated on-the-fly. This can be useful for generating coefficients that are not
+/// known at compile-time. However, this function may be slower than [`rational`] due to the
+/// lack of monomorphization optimizations.
+#[inline]
+pub fn rational_f<F0, F1, N, D>(x: F0, p: usize, q: usize, numerator: N, denomiator: D) -> F0
+where
+    F0: PolyRationalInOut<F1>,
+    F1: PolyNum,
+    N: FnMut(usize) -> F1,
+    D: FnMut(usize) -> F1,
+{
+    rational_f_internal::<F0, F1, _, _, 0, 0>(x, p, q, numerator, denomiator)
+}
+
+/// Variation of [`rational_f`] that is monomorphized for a specific number of coefficients.
+#[inline]
+pub fn rational_f_n<F0, F1, N, D, const P: usize, const Q: usize>(
+    x: F0,
+    numerator: N,
+    denomiator: D,
+) -> F0
+where
+    F0: PolyRationalInOut<F1>,
+    F1: PolyNum,
+    N: FnMut(usize) -> F1,
+    D: FnMut(usize) -> F1,
+{
+    rational_f_internal::<F0, F1, _, _, P, Q>(x, P, Q, numerator, denomiator)
+}
+
+#[rustfmt::skip]
+#[inline(always)]
+#[allow(clippy::many_single_char_names)]
+fn rational_f_internal<F0, F1, N, D, const P: usize, const Q: usize>(
+    x: F0,
+    p: usize,
+    q: usize,
+    mut numerator: N,
+    mut denominator: D,
+) -> F0
+where
+    F0: PolyRationalInOut<F1>,
+    F1: PolyNum,
+    N: FnMut(usize) -> F1,
+    D: FnMut(usize) -> F1,
+{
+    let one = F0::one();
+
+    // static or dynamic degree checks
+    let high_degree = (P > 2 || Q > 2) || (P == 0 && Q == 0 && (p > 2 || q > 2));
+
+    // if the length is greater than 2 (degree >= 2) the multiplication will be performed
+    // anyway, and LLVM will reuse this result for the non-inverted polynomial below.
+    if high_degree && (x * x) > one {
+        if P > 0 { unsafe { assume(p == P) } }
+        if Q > 0 { unsafe { assume(q == Q) } }
+
+        // To prevent large values of x from exploding to infinity, we can replace x with z=1/x
+        // and evaluate the polynomial in z to keep the powers of x within -1 and 1 where
+        // floats are most accurate.
+
+        let z = one / x;
+
+        let n = poly_f_internal::<_,_, _, P>(z, p, |i| numerator(p - i - 1));
+        let d = poly_f_internal::<_,_, _, Q>(z, q, |i| denominator(q - i - 1));
+
+        let mut res = n / d;
+
+        // no correction needed for same-degree rational polynomials
+        if P == Q && (P > 0 || likely(p == q)) {
+            return res;
+        }
+
+        // when the degree of the numerator and denominator are different, we need to correct
+        // the result by shifting over the difference in degrees
+        let (mut u, mut e) = if p < q { (z, q - p) } else { (x, p - q) };
+
+        // `res = res * powi(u, e)` assuming e > 0
+        // because e > 0 we can jump straight into the loop without a pre-check,
+        // and rearrange some checks into a happy path.
+
+        if P > 0 && Q > 0 {
+            // this version optimizes better for static lengths
+            loop {
+                if e & 1 != 0 {
+                    res = res * u;
+                }
+
+                e >>= 1;
+
+                if e == 0 {
+                    return res;
+                }
+
+                u = u * u;
+            }
+        } else {
+            // and this version optimizes better for dynamic lengths
+            loop {
+                if e & 1 != 0 {
+                    res = res * u;
+
+                    if e == 1 {
+                        return res;
+                    }
+                }
+
+                e >>= 1;
+                u = u * u;
+            }
+        }
+    } else {
+        poly_f_internal::<F0,F1, _, P>(x, p, numerator) / poly_f_internal::<F0,F1, _, Q>(x, q, denominator)
+    }
 }
 
 #[inline(always)]

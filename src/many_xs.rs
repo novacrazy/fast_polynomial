@@ -2,6 +2,7 @@ use core::ops::{Add, Index, Mul};
 
 use num_traits::{MulAdd, Zero};
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct ArrayWrap<const N: usize, F> {
     underlying: [F; N],
@@ -51,19 +52,6 @@ where
         Self { underlying }
     }
 }
-
-impl<const N: usize, F> Clone for ArrayWrap<N, F>
-where
-    F: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            underlying: self.underlying.clone(),
-        }
-    }
-}
-
-impl<const N: usize, F> Copy for ArrayWrap<N, F> where F: Copy {}
 
 impl<const N: usize, F> MulAdd<Self, Self> for ArrayWrap<N, F>
 where
