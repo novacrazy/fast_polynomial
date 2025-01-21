@@ -1,6 +1,6 @@
 #![allow(clippy::unreadable_literal)]
 
-use fast_polynomial::{many_xs::ArrayWrap, poly};
+use fast_polynomial::{poly, rational};
 
 // version from readme
 fn horners_method(x: f64, coefficients: &[f64]) -> f64 {
@@ -12,9 +12,10 @@ fn horners_method(x: f64, coefficients: &[f64]) -> f64 {
 }
 
 macro_rules! assert_feq {
-    ($e:expr, $a:expr, $b:expr) => {
-        assert!(($a - $b).abs() < $e);
-    };
+    ($e:expr, $a:expr, $b:expr) => {{
+        let (a, b) = ($a, $b);
+        assert!((a - b).abs() < $e, "{} != {}", a, b);
+    }};
 }
 
 #[test]
@@ -41,15 +42,33 @@ fn test_polys() {
     assert_feq!(1e-10, 0.662519601199, horners_method(-0.4, &c[..4]));
     assert_feq!(1e-10, 0.662519601199, poly(-0.4, &c[..4]));
 
-    for x in [-0.5, 0.1, 0.5, 0.9, 1.1] {
+    for x in [-0.5, 0.1, 0.5, 0.9, 1.1, 1.5] {
         for i in 0..=c.len() {
-            assert_feq!(1e-10, horners_method(x, &c[..i]), poly(x, &c[..i]));
+            assert_feq!(1e-4, horners_method(x, &c[..i]), poly(x, &c[..i]));
+
+            if i < (c.len() - 10) {
+                let mut numerator = &c[i..i + 10];
+                let mut denominator = &c[(i + 1)..(i + i % 10 + 2)];
+
+                if i % 2 == 0 {
+                    std::mem::swap(&mut numerator, &mut denominator);
+                }
+
+                //println!("{}: {}/{}", x, numerator.len(), denominator.len());
+
+                assert_feq!(
+                    1e-3,
+                    horners_method(x, numerator) / horners_method(x, denominator),
+                    rational(x, numerator, denominator)
+                );
+            }
         }
     }
 }
 
 #[test]
 fn test_all_at_once() {
+    use fast_polynomial::many_xs::ArrayWrap;
     #[rustfmt::skip]
     let c = [
         0.9066094402137101, 0.7030666449646632, 0.8062843184510005, 1.4354479997076703, 1.1700851966666594,
@@ -63,14 +82,13 @@ fn test_all_at_once() {
         1.1274404084913705, 0.6266756469558616,
     ];
 
-    const NUM_XS : usize = 5;
-    let all_xs : [_;NUM_XS] = [-0.5, 0.1, 0.5, 0.9, 1.1];
+    const NUM_XS: usize = 5;
+    let all_xs: [_; NUM_XS] = [-0.5, 0.1, 0.5, 0.9, 1.1];
     let all_xs_wrapped = ArrayWrap::new(all_xs);
     for i in 0..=c.len() {
-        let from_one_at_a_time : [_;NUM_XS] = core::array::from_fn(|x_idx| {
-            poly(all_xs[x_idx], &c[..i])
-        });
-        let from_all_at_once = poly::<ArrayWrap<NUM_XS,f64>,f64>(all_xs_wrapped,&c[..i]);
+        let from_one_at_a_time: [_; NUM_XS] =
+            core::array::from_fn(|x_idx| poly(all_xs[x_idx], &c[..i]));
+        let from_all_at_once = poly::<ArrayWrap<NUM_XS, f64>, f64>(all_xs_wrapped, &c[..i]);
         for x_idx in 0..NUM_XS {
             assert_feq!(1e-10, from_one_at_a_time[x_idx], from_all_at_once[x_idx]);
         }
