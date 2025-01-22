@@ -67,7 +67,6 @@ where
     }
 }
 
-#[cfg(feature = "fma")]
 impl<const N: usize, F> MulAdd<F, Self> for ArrayWrap<N, F>
 where
     F: MulAdd<F, F, Output = F> + Copy,
@@ -81,7 +80,6 @@ where
     }
 }
 
-#[cfg(not(feature = "fma"))]
 impl<const N: usize, F> Mul<F> for ArrayWrap<N, F>
 where
     F: Mul<F, Output = F> + Copy,
