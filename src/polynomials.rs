@@ -18,29 +18,22 @@
     clippy::similar_names
 )]
 
-use crate::{fma, PolyInOut, PolyNum};
+use crate::{fma, PolyCoeff, PolyInOut};
 
 #[inline(always)]
-pub fn poly_1<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, c0: F, c1: F) -> F0 {
+pub fn poly_1<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, c0: F, c1: F) -> F0 {
     let c0_up = c0.into();
     fma::<F0, F>(x, c1, c0_up)
 }
 
 #[inline(always)]
-pub fn poly_2<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, x2: F0, c0: F, c1: F, c2: F) -> F0 {
+pub fn poly_2<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, x2: F0, c0: F, c1: F, c2: F) -> F0 {
     let c0_up = c0.into();
     fma(x2, c2, fma(x, c1, c0_up))
 }
 
 #[inline(always)]
-pub fn poly_3<F0: PolyInOut<F> + From<F>, F: PolyNum>(
-    x: F0,
-    x2: F0,
-    c0: F,
-    c1: F,
-    c2: F,
-    c3: F,
-) -> F0 {
+pub fn poly_3<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, x2: F0, c0: F, c1: F, c2: F, c3: F) -> F0 {
     // x^2 * (x * c3 + c2) + (x*c1 + c0)
     let c0_up = c0.into();
     let c2_up = c2.into();
@@ -48,7 +41,7 @@ pub fn poly_3<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 }
 
 #[inline(always)]
-pub fn poly_4<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_4<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0,
     x2: F0,
     x4: F0,
@@ -69,7 +62,7 @@ pub fn poly_4<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 }
 
 #[inline(always)]
-pub fn poly_5<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_5<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0,
     x2: F0,
     x4: F0,
@@ -93,7 +86,7 @@ pub fn poly_5<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_6<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, x2: F0, x4: F0, c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F) -> F0 {
+pub fn poly_6<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, x2: F0, x4: F0, c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F) -> F0 {
     // x^4 * (x^2 * c6 + (x * c5 + c4)) + (x^2 * (x * c3 + c2) + (x * c1 + c0))
     let c0_up = c0.into();
     let c2_up = c2.into();
@@ -106,7 +99,7 @@ pub fn poly_6<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, x2: F0, x4: F0, c0:
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_7<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, x2: F0, x4: F0, c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F) -> F0 {
+pub fn poly_7<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, x2: F0, x4: F0, c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F) -> F0 {
     let c0_up = c0.into();
     let c2_up = c2.into();
     let c4_up = c4.into();
@@ -119,7 +112,7 @@ pub fn poly_7<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, x2: F0, x4: F0, c0:
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_8<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_8<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F
 ) -> F0 {
@@ -135,7 +128,7 @@ pub fn poly_8<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_9<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_9<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F
 ) -> F0 {
@@ -152,7 +145,7 @@ pub fn poly_9<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_10<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_10<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F, c10: F,
 ) -> F0 {
@@ -169,7 +162,7 @@ pub fn poly_10<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_11<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_11<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F, c10: F, c11: F
 ) -> F0 {
@@ -190,7 +183,7 @@ pub fn poly_11<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_12<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_12<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F, c10: F, c11: F, c12: F,
 ) -> F0 {
@@ -214,7 +207,7 @@ pub fn poly_12<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_13<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_13<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F, c10: F, c11: F, c12: F, c13: F,
 ) -> F0 {
@@ -239,7 +232,7 @@ pub fn poly_13<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_14<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_14<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F, c10: F, c11: F, c12: F, c13: F, c14: F
 ) -> F0 {
@@ -265,7 +258,7 @@ pub fn poly_14<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_15<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_15<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0,
     c0: F, c1: F, c2: F, c3: F, c4: F, c5: F, c6: F, c7: F, c8: F, c9: F, c10: F, c11: F, c12: F, c13: F, c14: F, c15: F
 ) -> F0 {
@@ -293,7 +286,7 @@ pub fn poly_15<F0: PolyInOut<F> + From<F>, F: PolyNum>(
 #[allow(dead_code)]
 #[rustfmt::skip]
 #[inline(always)]
-pub fn poly_30<F0: PolyInOut<F> + From<F>, F: PolyNum>(
+pub fn poly_30<F0: PolyInOut<F>, F: PolyCoeff>(
     x: F0, x2: F0, x4: F0, x8: F0, x16: F0,
     c00: F, c01: F, c02: F, c03: F, c04: F, c05: F, c06: F, c07: F, c08: F, c09: F, c10: F, c11: F, c12: F, c13: F, c14: F, c15: F,
     c16: F, c17: F, c18: F, c19: F, c20: F, c21: F, c22: F, c23: F, c24: F, c25: F, c26: F, c27: F, c28: F, c29: F, c30: F, c31: F

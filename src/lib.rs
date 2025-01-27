@@ -2,14 +2,15 @@
 #![doc = include_str!("../README.md")]
 #![allow(clippy::inline_always)]
 
-use traits::{PolyInOut, PolyNum, PolyRationalInOut};
+use traits::{PolyCoeff, PolyInOut, PolyRationalInOut};
 
-pub mod many_xs;
+mod many_xs;
 mod polynomials;
 mod traits;
+pub use many_xs::ArrayWrap;
 
 #[inline(always)]
-fn fma<F0: PolyInOut<F>, F: PolyNum>(x: F0, m: F, a: F0) -> F0 {
+fn fma<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, m: F, a: F0) -> F0 {
     #[cfg(feature = "fma")]
     return x.mul_add(m, a);
     #[cfg(not(feature = "fma"))]
@@ -23,10 +24,7 @@ fn fma<F0: PolyInOut<F>, F: PolyNum>(x: F0, m: F, a: F0) -> F0 {
 /// other methods such as [`poly`] may require to support many lengths. This function will
 /// be faster, put simply.
 #[inline]
-pub fn poly_array<F0: PolyInOut<F1> + From<F1>, F1: PolyNum, const N: usize>(
-    x: F0,
-    coeffs: &[F1; N],
-) -> F0 {
+pub fn poly_array<F0: PolyInOut<F1>, F1: PolyCoeff, const N: usize>(x: F0, coeffs: &[F1; N]) -> F0 {
     poly_f_n::<F0, F1, _, N>(x, |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
@@ -34,8 +32,8 @@ pub fn poly_array<F0: PolyInOut<F1> + From<F1>, F1: PolyNum, const N: usize>(
 #[inline(always)]
 pub fn poly_array_t<F0, F1, T, const N: usize>(x: F0, coeffs: &[T; N]) -> F0
 where
-    F0: PolyInOut<F1> + From<F1>,
-    F1: PolyNum,
+    F0: PolyInOut<F1>,
+    F1: PolyCoeff,
     T: Clone + Into<F1>,
 {
     poly_f_n::<F0, F1, _, N>(x, |i| unsafe { coeffs.get_unchecked(i).clone().into() })
@@ -45,7 +43,7 @@ where
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`poly_array`] instead if possible.
-pub fn poly<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, coeffs: &[F]) -> F0 {
+pub fn poly<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, coeffs: &[F]) -> F0 {
     poly_f_internal::<F0, F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
@@ -55,7 +53,7 @@ pub fn poly<F0: PolyInOut<F> + From<F>, F: PolyNum>(x: F0, coeffs: &[F]) -> F0 {
 /// generated on-the-fly. This can be useful for generating coefficients that are not
 /// known at compile-time. However, this function may be slower than [`poly`] due to the
 /// lack of monomorphization optimizations.
-pub fn poly_f<F0: PolyInOut<F> + From<F>, F: PolyNum, G>(x: F0, n: usize, g: G) -> F0
+pub fn poly_f<F0: PolyInOut<F>, F: PolyCoeff, G>(x: F0, n: usize, g: G) -> F0
 where
     G: FnMut(usize) -> F,
 {
@@ -63,7 +61,7 @@ where
 }
 
 /// Variation of [`poly_f`] that is monomorphized for a specific number of coefficients.
-pub fn poly_f_n<F0: PolyInOut<F> + From<F>, F: PolyNum, G, const N: usize>(x: F0, g: G) -> F0
+pub fn poly_f_n<F0: PolyInOut<F>, F: PolyCoeff, G, const N: usize>(x: F0, g: G) -> F0
 where
     G: FnMut(usize) -> F,
 {
@@ -72,7 +70,7 @@ where
 
 #[inline(always)]
 #[rustfmt::skip]
-fn poly_f_internal<F0: PolyInOut<F> + From<F>, F: PolyNum, G, const LENGTH: usize>(x: F0, n: usize, mut g: G) -> F0
+fn poly_f_internal<F0: PolyInOut<F>, F: PolyCoeff, G, const LENGTH: usize>(x: F0, n: usize, mut g: G) -> F0
 where
     G: FnMut(usize) -> F,
 {
@@ -168,7 +166,7 @@ pub fn rational_array<F0, F1, const P: usize, const Q: usize>(
 ) -> F0
 where
     F0: PolyRationalInOut<F1>,
-    F1: PolyNum,
+    F1: PolyCoeff,
 {
     rational_f_n::<F0, F1, _, _, P, Q>(
         x,
@@ -186,7 +184,7 @@ pub fn rational_array_t<F0, F1, T, const P: usize, const Q: usize>(
 ) -> F0
 where
     F0: PolyRationalInOut<F1>,
-    F1: PolyNum,
+    F1: PolyCoeff,
     T: Clone + Into<F1>,
 {
     rational_f_n::<F0, F1, _, _, P, Q>(
@@ -200,7 +198,7 @@ where
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`rational_array`] instead if possible.
-pub fn rational<F0: PolyRationalInOut<F1>, F1: PolyNum>(
+pub fn rational<F0: PolyRationalInOut<F1>, F1: PolyCoeff>(
     x: F0,
     numerator: &[F1],
     denominator: &[F1],
@@ -230,7 +228,7 @@ pub fn rational<F0: PolyRationalInOut<F1>, F1: PolyNum>(
 pub fn rational_f<F0, F1, N, D>(x: F0, p: usize, q: usize, numerator: N, denomiator: D) -> F0
 where
     F0: PolyRationalInOut<F1>,
-    F1: PolyNum,
+    F1: PolyCoeff,
     N: FnMut(usize) -> F1,
     D: FnMut(usize) -> F1,
 {
@@ -246,7 +244,7 @@ pub fn rational_f_n<F0, F1, N, D, const P: usize, const Q: usize>(
 ) -> F0
 where
     F0: PolyRationalInOut<F1>,
-    F1: PolyNum,
+    F1: PolyCoeff,
     N: FnMut(usize) -> F1,
     D: FnMut(usize) -> F1,
 {
@@ -265,7 +263,7 @@ fn rational_f_internal<F0, F1, N, D, const P: usize, const Q: usize>(
 ) -> F0
 where
     F0: PolyRationalInOut<F1>,
-    F1: PolyNum,
+    F1: PolyCoeff,
     N: FnMut(usize) -> F1,
     D: FnMut(usize) -> F1,
 {

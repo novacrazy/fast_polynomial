@@ -15,7 +15,7 @@ use num_traits::{MulAdd, One, Zero};
 /// [build]
 /// rustflags = ["-C", "target-feature=+fma"]
 /// ```
-pub trait PolyNum:
+pub trait PolyCoeff:
     Sized
     + Copy
     + Zero
@@ -25,7 +25,7 @@ pub trait PolyNum:
 {
 }
 
-impl<T> PolyNum for T where
+impl<T> PolyCoeff for T where
     T: Sized
         + Copy
         + Zero
@@ -36,28 +36,25 @@ impl<T> PolyNum for T where
 }
 
 #[cfg(feature = "fma")]
-pub trait PolyInOut<F>: PolyNum + MulAdd<F, Self, Output = Self> {}
+pub trait PolyInOut<F>: PolyCoeff + MulAdd<F, Self, Output = Self> + From<F> {}
 
 #[cfg(feature = "fma")]
-impl<F, T> PolyInOut<F> for T where T: PolyNum + MulAdd<F, Self, Output = Self> {}
+impl<F, T> PolyInOut<F> for T where T: PolyCoeff + MulAdd<F, Self, Output = Self> + From<F> {}
 
 #[cfg(not(feature = "fma"))]
-pub trait PolyInOut<F>: PolyNum + Mul<F, Output = Self> {}
+pub trait PolyInOut<F>: PolyCoeff + Mul<F, Output = Self> + From<F> {}
 
 #[cfg(not(feature = "fma"))]
-impl<F, T> PolyInOut<F> for T where T: PolyNum + Mul<F, Output = Self> {}
+impl<F, T> PolyInOut<F> for T where T: PolyCoeff + Mul<F, Output = Self> + From<F> {}
 
-/// Extension of [`PolyNum`] for numbers that can be evaluated in a rational polynomial.
+/// Extension of [`PolyInOut`] for numbers that can be evaluated in a rational polynomial.
 ///
 /// [`One`] and [`PartialOrd`] are required to perform a specific optimization for rational
 /// polynomials wherein the input is inverted if the absolute value of the input is greater than 1.
 /// This is useful for numerical stability, as it keeps the powers of the input within the range of 0 to 1.
-pub trait PolyRationalInOut<F>:
-    PolyInOut<F> + One + Div<Self, Output = Self> + PartialOrd + From<F>
-{
-}
+pub trait PolyRationalInOut<F>: PolyInOut<F> + One + Div<Self, Output = Self> + PartialOrd {}
 
 impl<T, F> PolyRationalInOut<F> for T where
-    T: PolyInOut<F> + One + Div<Self, Output = Self> + PartialOrd + From<F>
+    T: PolyInOut<F> + One + Div<Self, Output = Self> + PartialOrd
 {
 }

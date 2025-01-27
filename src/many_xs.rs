@@ -1,8 +1,8 @@
-use core::ops::{Add, Index, Mul};
+use core::ops::{Add, Div, Index, Mul};
 
-use num_traits::{MulAdd, Zero};
+use num_traits::{MulAdd, One, Zero};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
 pub struct ArrayWrap<const N: usize, F> {
     underlying: [F; N],
@@ -107,5 +107,32 @@ impl<const N: usize, F> Index<usize> for ArrayWrap<N, F> {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.underlying[index]
+    }
+}
+
+impl<const N: usize, F: PartialOrd> PartialOrd for ArrayWrap<N, F> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.underlying.partial_cmp(&other.underlying)
+    }
+}
+
+impl<const N: usize, F> One for ArrayWrap<N, F>
+where
+    F: One + Copy,
+{
+    fn one() -> Self {
+        Self::new([F::one(); N])
+    }
+}
+
+impl<const N: usize, F> Div for ArrayWrap<N, F>
+where
+    F: Div<F, Output = F> + Copy,
+{
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        let underlying = core::array::from_fn(|idx| self.underlying[idx] / rhs.underlying[idx]);
+        Self { underlying }
     }
 }
