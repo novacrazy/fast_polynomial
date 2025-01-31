@@ -16,8 +16,7 @@ use num_traits::{MulAdd, One, Zero};
 /// rustflags = ["-C", "target-feature=+fma"]
 /// ```
 pub trait PolyCoeff:
-    Sized
-    + Copy
+    Copy
     + Zero
     + Add<Self, Output = Self>
     + Mul<Self, Output = Self>
@@ -26,8 +25,7 @@ pub trait PolyCoeff:
 }
 
 impl<T> PolyCoeff for T where
-    T: Sized
-        + Copy
+    T: Copy
         + Zero
         + Add<Self, Output = Self>
         + Mul<Self, Output = Self>
