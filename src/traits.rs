@@ -1,7 +1,7 @@
 use core::ops::{Add, Div, Mul};
 use num_traits::{MulAdd, One, Zero};
 
-/// The minimum required functionality for a number to evaluated in a polynomial. [`MulAdd`]
+/// The minimum required functionality for coefficients of a polynomial. [`MulAdd`]
 /// is required to allow for the fused multiply-add operation to be used, which can be
 /// faster and more numerically stable than separate multiply and add operations.
 ///
@@ -34,12 +34,16 @@ impl<T> PolyCoeff for T where
 }
 
 #[cfg(feature = "fma")]
+/// The minimum required functionality for a number (or many numbers simultaneously)
+/// to evaluated in a polynomial with `F` coefficients.
 pub trait PolyInOut<F>: PolyCoeff + MulAdd<F, Self, Output = Self> + From<F> {}
 
 #[cfg(feature = "fma")]
 impl<F, T> PolyInOut<F> for T where T: PolyCoeff + MulAdd<F, Self, Output = Self> + From<F> {}
 
 #[cfg(not(feature = "fma"))]
+/// The minimum required functionality for a number (or many numbers simultaneously)
+/// to evaluated in a polynomial with `F` coefficients.
 pub trait PolyInOut<F>: PolyCoeff + Mul<F, Output = Self> + From<F> {}
 
 #[cfg(not(feature = "fma"))]

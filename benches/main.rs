@@ -22,8 +22,8 @@ pub fn horners_method<F: Float>(x: F, coeffs: &[F]) -> F {
     horners_method_f(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
-const TRIALS_PER_BENCH_FUNCTION : usize = 100;
-const TRIALS_PER_BENCH_FUNCTION_MANY : usize = 5;
+const TRIALS_PER_BENCH_FUNCTION: usize = 100;
+const TRIALS_PER_BENCH_FUNCTION_MANY: usize = 5;
 
 #[allow(clippy::too_many_lines)]
 fn criterion_benchmark(c: &mut Criterion) {
@@ -171,8 +171,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let x = black_box(0.5);
 
-    let mut g = c.benchmark_group("Polynomials");
-
+    let mut group = c.benchmark_group("Polynomials");
     for i in [
         1,
         4,
@@ -192,14 +191,15 @@ fn criterion_benchmark(c: &mut Criterion) {
         all_coeffs.len(),
     ] {
         let coeffs = black_box(&all_coeffs[..i]);
-
         let sub_coeffs = black_box(if i < (all_coeffs.len() - 100) {
             &all_coeffs[i..(i + i % 100)]
         } else {
             &all_coeffs[0..20]
         });
 
-        g.bench_function(format!("{:04}: Estrin's Scheme", coeffs.len()), |b| {
+        group.throughput(Throughput::Elements(i as u64));
+        let id = format!("Estrin's Scheme({x})");
+        group.bench_with_input(BenchmarkId::new(id, i), &i, |b, _i| {
             b.iter(|| {
                 for _ in 0..TRIALS_PER_BENCH_FUNCTION {
                     black_box(fast_polynomial::poly(x, coeffs));
@@ -207,7 +207,9 @@ fn criterion_benchmark(c: &mut Criterion) {
             });
         });
 
-        g.bench_function(format!("{:04}: Horner's Method", coeffs.len()), |b| {
+        group.throughput(Throughput::Elements(i as u64));
+        let id = format!("Horner's Method({x})");
+        group.bench_with_input(BenchmarkId::new(id, i), &i, |b, _i| {
             b.iter(|| {
                 for _ in 0..TRIALS_PER_BENCH_FUNCTION {
                     black_box(horners_method(x, coeffs));
@@ -216,8 +218,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
 
         for x in black_box([-1.5, 0.5, 1.5]) {
-            let id = format!("Rational({x}): {:04}/{:04}", coeffs.len(), sub_coeffs.len());
-            g.bench_function(id, |b| {
+            let id = format!("Rational({x})");
+            group.bench_with_input(BenchmarkId::new(id, i), &i, |b, _i| {
                 b.iter(|| {
                     for _ in 0..TRIALS_PER_BENCH_FUNCTION {
                         black_box(fast_polynomial::rational(x, coeffs, sub_coeffs));
@@ -226,11 +228,8 @@ fn criterion_benchmark(c: &mut Criterion) {
             });
         }
     }
-
-    g.finish();
+    group.finish();
 }
-
-
 
 #[allow(clippy::too_many_lines)]
 fn criterion_many_benchmark(c: &mut Criterion) {
@@ -378,7 +377,18 @@ fn criterion_many_benchmark(c: &mut Criterion) {
         1.1274404084913705, 0.6266756469558616,
     ]);
 
-    let x = black_box([-1.0, -0.9, -0.40375379, -0.5, 0.0, 0.00001, 0.33859, 0.6239484, 0.75, 1.0]);
+    let x = black_box([
+        -1.0,
+        -0.9,
+        -0.40375379,
+        -0.5,
+        0.0,
+        0.00001,
+        0.33859,
+        0.6239484,
+        0.75,
+        1.0,
+    ]);
 
     let mut group = c.benchmark_group("Polynomials on Many xs");
     for i in [
@@ -402,33 +412,40 @@ fn criterion_many_benchmark(c: &mut Criterion) {
         let coeffs = black_box(&all_coeffs[..i]);
 
         group.throughput(Throughput::Elements(i as u64));
-        group.bench_with_input(BenchmarkId::new("Estrin's One at a Time",i), &i, |b, _i| {
-            b.iter(|| {
-                for _ in 0..TRIALS_PER_BENCH_FUNCTION_MANY {
-                    for x_cur in x {
-                        black_box(fast_polynomial::poly(x_cur, coeffs));
+        group.bench_with_input(
+            BenchmarkId::new("Estrin's One at a Time", i),
+            &i,
+            |b, _i| {
+                b.iter(|| {
+                    for _ in 0..TRIALS_PER_BENCH_FUNCTION_MANY {
+                        for x_cur in x {
+                            black_box(fast_polynomial::poly(x_cur, coeffs));
+                        }
                     }
-                }
-            });
-        });
-        group.bench_with_input(BenchmarkId::new("Horner's One at a Time",i), &i, |b, _i| {
-            b.iter(|| {
-                for _ in 0..TRIALS_PER_BENCH_FUNCTION_MANY {
-                    for x_cur in x {
-                        black_box(horners_method(x_cur, coeffs));
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("Horner's One at a Time", i),
+            &i,
+            |b, _i| {
+                b.iter(|| {
+                    for _ in 0..TRIALS_PER_BENCH_FUNCTION_MANY {
+                        for x_cur in x {
+                            black_box(horners_method(x_cur, coeffs));
+                        }
                     }
-                }
-            });
-        });
+                });
+            },
+        );
         let x_block = ArrayWrap::new(x);
-        group.bench_with_input(BenchmarkId::new("Estrin's All at Once",i), &i, |b, _i| {
+        group.bench_with_input(BenchmarkId::new("Estrin's All at Once", i), &i, |b, _i| {
             b.iter(|| {
                 for _ in 0..TRIALS_PER_BENCH_FUNCTION_MANY {
                     black_box(fast_polynomial::poly(x_block, coeffs));
                 }
             });
         });
-
     }
     group.finish();
 }

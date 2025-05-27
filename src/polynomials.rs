@@ -22,14 +22,14 @@ use crate::{fma, PolyCoeff, PolyInOut};
 
 #[inline(always)]
 pub fn poly_1<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, c0: F, c1: F) -> F0 {
-    let c0_up = c0.into();
-    fma::<F0, F>(x, c1, c0_up)
+    // x*c1 + c0
+    fma::<F0, F>(x, c1, c0.into())
 }
 
 #[inline(always)]
 pub fn poly_2<F0: PolyInOut<F>, F: PolyCoeff>(x: F0, x2: F0, c0: F, c1: F, c2: F) -> F0 {
-    let c0_up = c0.into();
-    fma(x2, c2, fma(x, c1, c0_up))
+    // x^2*c2 + (x*c1 + c0)
+    fma(x2, c2, fma(x, c1, c0.into()))
 }
 
 #[inline(always)]
