@@ -127,6 +127,17 @@ pub fn poly<F: PolyNum>(x: F, coeffs: &[F]) -> F {
     poly_f_internal::<F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
+/// More flexible variant of [`poly`]
+pub fn poly_t<F: PolyNum, T>(x: F, coeffs: &[T]) -> F
+where
+    T: Clone + Into<F>,
+{
+    // SAFETY: internal calls ensure the indices are valid
+    poly_f_internal::<F, _, 0>(x, coeffs.len(), |i| unsafe {
+        coeffs.get_unchecked(i).clone().into()
+    })
+}
+
 /// Evaluate a rational polynomial for an array of coefficients. May not be monomorphized.
 ///
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
