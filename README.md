@@ -4,9 +4,15 @@ fast_polynomial
 This crate implements a hybrid Estrin's/Horner's method suitable for evaluating polynomials _fast_
 by exploiting instruction-level parallelism.
 
-## **Important Note About Fused Multiply-Add**
+## **Important Notes About Fused Multiply-Add and crate features**
 
-FMA is only used by Rust if your binary is compiled with the appropriate Rust flags:
+`fast_polynomial` is built upon the [`MulAdd`] trait from the `num-traits` crate, which _may_ use
+hardware Fused Multiply-Add (FMA) instructions when available. **It is up to the user** to ensure
+that the appropriate `MulAdd` implementation is selected for their use case. We provide the `std`
+and `libm` (emulated) crate features to select the appropriate `num-traits` backend. However, you
+may also implement `MulAdd` for your own wrapper types if needed and ignore these features.
+
+Furthermore, Hardware FMA is only used by Rust if your binary is compiled with the appropriate feature flags:
 
 `RUSTFLAGS="-C target-feature=+fma"`
 
@@ -17,7 +23,7 @@ or
 rustflags = ["-C", "target-feature=+fma"]
 ```
 
-otherwise separate multiply and addition operations are used.
+or the equivalent for your target architecture, or `target-cpu`.
 
 ## Motivation
 
@@ -103,9 +109,9 @@ provided rational polynomial evaluation routines both improve numerical stabilit
 Using `poly_array` can be significantly more performant for fixed-degree polynomials. In optimized builds,
 the monomorphized codegen will be nearly ideal and avoid unnecessary branching.
 
-However, should you need to evaluate multiple polynomials with the same X value, the `polynomials` module
+Should you need to evaluate multiple polynomials with the same X value, the `polynomials` module
 exists to provide direct fixed-degree functions that allow the reuse of powers of X up to degree-15.
 
 ## Cargo Features
 
-The `std` (default) and `libm` crate features are passed through to `num-traits`.
+The `std` and `libm` crate features are passed through to `num-traits` for a suitable `MulAdd` implementation. `std` will override `libm` if both are enabled.

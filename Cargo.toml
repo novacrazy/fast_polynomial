@@ -1,6 +1,6 @@
 [package]
 name = "fast_polynomial"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["novacrazy <novacrazy@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -11,9 +11,9 @@ include = ["src/**/*", "LICENSE", "README.md"]
 readme = "README.md"
 documentation = "https://docs.rs/fast_polynomial"
 repository = "https://github.com/novacrazy/fast_polynomial"
+rust-version = "1.81.0"
 
 [features]
-default = ["std"]
 std = ["num-traits/std"]
 libm = ["num-traits/libm"]
 
@@ -22,6 +22,7 @@ num-traits = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+approx = "0.5.1"
 
 [[bench]]
 name = "main"

@@ -1,23 +1,27 @@
 #![no_std]
 #![doc = include_str!("../README.md")]
+#![deny(
+    missing_docs,
+    clippy::missing_safety_doc,
+    clippy::undocumented_unsafe_blocks,
+    clippy::must_use_candidate,
+    clippy::perf,
+    clippy::complexity,
+    clippy::suspicious
+)]
 
 use core::ops::{Add, Div, Mul, Neg};
 use num_traits::{MulAdd, One, Zero};
 
-/// The minimum required functionality for a number to evaluated in a polynomial. [`MulAdd`]
-/// is required to allow for the fused multiply-add operation to be used, which can be
-/// faster and more numerically stable than separate multiply and add operations.
+/// **READ DOCS** The minimum required functionality for a number to evaluated in a polynomial.
 ///
-/// # Note
+/// `fast_polynomial` is built upon the [`MulAdd`] trait from the `num-traits` crate, which _may_ use
+/// hardware Fused Multiply-Add (FMA) instructions when available. **It is up to the user** to ensure
+/// that the appropriate `MulAdd` implementation is selected for their use case. We provide the `std`
+/// and `libm` (emulated) crate features to select the appropriate `num-traits` backend. However, you
+/// may also implement `MulAdd` for your own wrapper types if needed and ignore these features.
 ///
-/// For fused multiply-add to be used, the target feature `fma` must be enabled. This can be
-/// done by editing your `RUSTFLAGS` environment variable to include `-C target-feature=+fma`,
-/// or by editing your `.cargo/config.toml` to include:
-///
-/// ```toml
-/// [build]
-/// rustflags = ["-C", "target-feature=+fma"]
-/// ```
+/// See the README for more information.
 pub trait PolyNum:
     Sized
     + Copy
@@ -50,18 +54,6 @@ impl<T> PolyRational for T where
 {
 }
 
-#[inline(always)]
-fn fma<F>(x: F, m: F, a: F) -> F
-where
-    F: MulAdd<F, F, Output = F> + Add<F, Output = F> + Mul<F, Output = F>,
-{
-    #[cfg(target_feature = "fma")]
-    return x.mul_add(m, a);
-
-    #[cfg(not(target_feature = "fma"))]
-    return x * m + a;
-}
-
 pub mod polynomials;
 
 /// Evaluate a polynomial for an array of coefficients. Can be monomorphized.
@@ -72,6 +64,7 @@ pub mod polynomials;
 /// be faster, put simply.
 #[inline(always)]
 pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
+    // SAFETY: internal calls ensure the indices are valid
     poly_f_n::<F, _, N>(x, |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
@@ -85,12 +78,14 @@ pub fn poly_array<F: PolyNum, const N: usize>(x: F, coeffs: &[F; N]) -> F {
 pub fn rational_array<F: PolyRational, const P: usize, const Q: usize>(
     x: F,
     numerator: &[F; P],
-    denomiator: &[F; Q],
+    denominator: &[F; Q],
 ) -> F {
     rational_f_n::<F, _, _, P, Q>(
         x,
+        // SAFETY: internal calls ensure the indices are valid
         |i| unsafe { *numerator.get_unchecked(i) },
-        |i| unsafe { *denomiator.get_unchecked(i) },
+        // SAFETY: internal calls ensure the indices are valid
+        |i| unsafe { *denominator.get_unchecked(i) },
     )
 }
 
@@ -100,6 +95,7 @@ pub fn poly_array_t<F: PolyNum, T, const N: usize>(x: F, coeffs: &[T; N]) -> F
 where
     T: Clone + Into<F>,
 {
+    // SAFETY: internal calls ensure the indices are valid
     poly_f_n::<F, _, N>(x, |i| unsafe { coeffs.get_unchecked(i).clone().into() })
 }
 
@@ -108,15 +104,17 @@ where
 pub fn rational_array_t<F: PolyRational, T, const P: usize, const Q: usize>(
     x: F,
     numerator: &[T; P],
-    denomiator: &[T; Q],
+    denominator: &[T; Q],
 ) -> F
 where
     T: Clone + Into<F>,
 {
     rational_f_n::<F, _, _, P, Q>(
         x,
+        // SAFETY: internal calls ensure the indices are valid
         |i| unsafe { numerator.get_unchecked(i).clone().into() },
-        |i| unsafe { denomiator.get_unchecked(i).clone().into() },
+        // SAFETY: internal calls ensure the indices are valid
+        |i| unsafe { denominator.get_unchecked(i).clone().into() },
     )
 }
 
@@ -125,6 +123,7 @@ where
 /// To not be monomorphized means this function's codegen may be used for any number of coefficients,
 /// and therefore contains branches. It will be faster to use [`poly_array`] instead if possible.
 pub fn poly<F: PolyNum>(x: F, coeffs: &[F]) -> F {
+    // SAFETY: internal calls ensure the indices are valid
     poly_f_internal::<F, _, 0>(x, coeffs.len(), |i| unsafe { *coeffs.get_unchecked(i) })
 }
 
@@ -137,7 +136,9 @@ pub fn rational<F: PolyRational>(x: F, numerator: &[F], denominator: &[F]) -> F 
         x,
         numerator.len(),
         denominator.len(),
+        // SAFETY: internal calls ensure the indices are valid
         |i| unsafe { *numerator.get_unchecked(i) },
+        // SAFETY: internal calls ensure the indices are valid
         |i| unsafe { *denominator.get_unchecked(i) },
     )
 }
@@ -169,12 +170,18 @@ where
 /// known at compile-time. However, this function may be slower than [`rational`] due to the
 /// lack of monomorphization optimizations.
 #[inline]
-pub fn rational_f<F: PolyRational, N, D>(x: F, p: usize, q: usize, numerator: N, denomiator: D) -> F
+pub fn rational_f<F: PolyRational, N, D>(
+    x: F,
+    p: usize,
+    q: usize,
+    numerator: N,
+    denominator: D,
+) -> F
 where
     N: FnMut(usize) -> F,
     D: FnMut(usize) -> F,
 {
-    rational_f_internal::<F, _, _, 0, 0>(x, p, q, numerator, denomiator)
+    rational_f_internal::<F, _, _, 0, 0>(x, p, q, numerator, denominator)
 }
 
 /// Variation of [`poly_f`] that is monomorphized for a specific number of coefficients.
@@ -191,13 +198,13 @@ where
 pub fn rational_f_n<F: PolyRational, N, D, const P: usize, const Q: usize>(
     x: F,
     numerator: N,
-    denomiator: D,
+    denominator: D,
 ) -> F
 where
     N: FnMut(usize) -> F,
     D: FnMut(usize) -> F,
 {
-    rational_f_internal::<F, _, _, P, Q>(x, P, Q, numerator, denomiator)
+    rational_f_internal::<F, _, _, P, Q>(x, P, Q, numerator, denominator)
 }
 
 #[rustfmt::skip]
@@ -221,8 +228,10 @@ where
     // if the length is greater than 2 (degree >= 2) the multiplication will be performed
     // anyway, and LLVM will reuse this result for the non-inverted polynomial below.
     if high_degree && (x * x) > one {
-        if P > 0 { unsafe { assume(p == P) } }
-        if Q > 0 { unsafe { assume(q == Q) } }
+        // SAFETY: IFF P > 0, p guaranteed to be == P here due to the generic parameter,
+        if P > 0 { unsafe { core::hint::assert_unchecked(p == P) } }
+        // SAFETY: IFF Q > 0, q guaranteed to be == Q here due to the generic parameter,
+        if Q > 0 { unsafe { core::hint::assert_unchecked(q == Q) } }
 
         // To prevent large values of x from exploding to infinity, we can replace x with z=1/x
         // and evaluate the polynomial in z to keep the powers of x within -1 and 1 where
@@ -278,9 +287,10 @@ where
                 u = u * u;
             }
         }
-    } else {
-        poly_f_internal::<_, _, P>(x, p, numerator) / poly_f_internal::<_, _, Q>(x, q, denominator)
     }
+
+    // otherwise evaluate normally
+    poly_f_internal::<_, _, P>(x, p, numerator) / poly_f_internal::<_, _, Q>(x, q, denominator)
 }
 
 #[inline(always)]
@@ -292,7 +302,9 @@ where
     use polynomials::*;
 
     if LENGTH > 0 {
-        unsafe { assume(n == LENGTH) };
+        // SAFETY: IFF LENGTH > 0, n guaranteed to be == LENGTH here due to the generic parameter,
+        // so this is provided as an optimization hint to the compiler.
+        unsafe { core::hint::assert_unchecked(n == LENGTH) };
     }
 
     macro_rules! poly {
@@ -335,11 +347,11 @@ where
 
     let mut sum = F::zero();
 
-    // Use a hybrid Estrin/Horner algorithm
+    // Use a hybrid Estrin/Horner algorithm for large polynomials
     let mut j = n;
     while j >= 16 {
         j -= 16;
-        sum = fma(sum, x16, poly!(poly_15(x, x2, x4, x8; { j } + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])));
+        sum = sum.mul_add(x16, poly!(poly_15(x, x2, x4, x8; { j } + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])));
     }
 
     // handle remaining powers
@@ -360,10 +372,12 @@ where
         13 => (x8*x4*x,        poly!(poly_12(x, x2, x4, x8; {0} + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))),
         14 => (x8*x4*x2,       poly!(poly_13(x, x2, x4, x8; {0} + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]))),
         15 => ((x8*x4)*(x2*x), poly!(poly_14(x, x2, x4, x8; {0} + g[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]))),
+
+        // SAFETY: n guaranteed to be <=15 here due to the loop above
         _  => unsafe { core::hint::unreachable_unchecked() }
     };
 
-    fma(sum, rmx, res)
+    sum.mul_add(rmx, res)
 }
 
 #[inline(always)]
@@ -374,11 +388,4 @@ fn cold() {}
 #[rustfmt::skip]
 fn likely(b: bool) -> bool {
     if !b { cold() } b
-}
-
-#[inline(always)]
-unsafe fn assume(cond: bool) {
-    if !cond {
-        core::hint::unreachable_unchecked();
-    }
 }
